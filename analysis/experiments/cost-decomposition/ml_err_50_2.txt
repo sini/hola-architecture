@@ -1,0 +1,23 @@
+error:
+       … while calling the 'deepSeq' builtin
+         at /tmp/hola-exp/mergeload.nix:27:3:
+           26| in
+           27|   builtins.deepSeq (builtins.mapAttrs (k: v: v.text) svcUnits) "ok"
+             |   ^
+           28|
+
+       … while evaluating the attribute '"svc0.service"'
+
+       … while evaluating the attribute 'value'
+         at /home/sini/Documents/repos/nixpkgs/lib/modules.nix:1147:7:
+         1146|     // {
+         1147|       value = addErrorContext "while evaluating the option `${showOption loc}':" value;
+             |       ^
+         1148|       inherit (res.defsFinal') highestPrio;
+
+       (stack trace truncated; use '--show-trace' to show the full trace)
+
+       error: The option `systemd.services.svc0.description' has conflicting definition values:
+       - In `/tmp/hola-exp/mergeload.nix': "svc 0 layer 0"
+       - In `/tmp/hola-exp/mergeload.nix': "svc 0 layer 1"
+       Use `lib.mkForce value` or `lib.mkDefault value` to change the priority on any of these definitions.

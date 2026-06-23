@@ -1,0 +1,43 @@
+{
+  "cpuTime": 1.477800965309143,
+  "envs": {
+    "bytes": 66925056,
+    "elements": 4931149,
+    "number": 3434483
+  },
+  "gc": {
+    "heapSize": 436469760,
+    "totalBytes": 554051472
+  },
+  "list": {
+    "bytes": 9741672,
+    "concats": 131609,
+    "elements": 1217709
+  },
+  "nrAvoided": 3795826,
+  "nrFunctionCalls": 2912909,
+  "nrLookups": 1777646,
+  "nrOpUpdateValuesCopied": 11307368,
+  "nrOpUpdates": 236316,
+  "nrPrimOpCalls": 1495465,
+  "nrThunks": 4600325,
+  "sets": {
+    "bytes": 265063792,
+    "elements": 16036113,
+    "number": 1060748
+  },
+  "sizes": {
+    "Attr": 16,
+    "Bindings": 8,
+    "Env": 8,
+    "Value": 8
+  },
+  "symbols": {
+    "bytes": 1132569,
+    "number": 92009
+  },
+  "values": {
+    "bytes": 0,
+    "number": 0
+  }
+}

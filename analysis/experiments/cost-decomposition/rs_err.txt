@@ -1,0 +1,18 @@
+error:
+       … while calling the 'deepSeq' builtin
+         at /tmp/hola-exp/realsvc.nix:28:3:
+           27|   # that drives each submodule element's collect+merge to completion.
+           28|   builtins.deepSeq
+             |   ^
+           29|     (builtins.mapAttrs (k: v: v.text or v.unit or null) nixos.config.systemd.units)
+
+       … while calling the 'mapAttrs' builtin
+         at /tmp/hola-exp/realsvc.nix:29:6:
+           28|   builtins.deepSeq
+           29|     (builtins.mapAttrs (k: v: v.text or v.unit or null) nixos.config.systemd.units)
+             |      ^
+           30|     "ok"
+
+       (stack trace truncated; use '--show-trace' to show the full trace)
+
+       error: The option `fileSystems."/".fsType' was accessed but has no value defined. Try setting the option.
