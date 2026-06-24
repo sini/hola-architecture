@@ -24,12 +24,13 @@ and the line lands exactly on the deferred eval-server track (H6):
   laziness for free: demand-ordering and "don't recompute the undemanded" are
   what `force` + gen-scope's `_eval` already give. All recompute / cutoff /
   provenance / fixpoint ops live here.
-- **Externalized-DCG shell (deferred = eval-server).** The *invalidation* half —
-  **amortized `dirty` flags**, **`gc`**, and a **persisted hierarchical trace** —
-  needs mutable state *between* `nix eval` invocations. Pure Nix has no
-  in-place amortized dirtying and no weak-ref gc; laziness already collects
-  unforced thunks within a run. So these ops are *specified* but *realized* only
-  with the out-of-language eval-server.
+- **Externalized-DCG shell — OUT OF SCOPE (decision 2026-06-23).** The *cheap*
+  cross-edit cache — **amortized `dirty` flags**, **`gc`**, a **persisted *mutable*
+  trace** — needs mutation *between* `nix eval` runs (H6) and is a *different
+  (stateful) substrate*, not a deferred hola component (impure cost too high, no
+  clean IPC). Cross-eval *result* reuse where wanted is the **Nix store** itself
+  (deep-constructive traces via a derivation/IFD, content-addressed, pure). Revisit
+  only via the evaluator-layer track (Lix/parallel-eval), never a hola daemon.
 - **Pure-Nix advantage:** purity *enforces Adapton's read-only-inner memo-
   soundness precondition for free* — OCaml-Adapton could not enforce it
   statically (Hammer 2014 fn.1). gen-rebuild gets the soundness gratis; it only
@@ -75,9 +76,10 @@ allocation — stable node identity across runs, prerequisite for swapping/switc
 lower bound **and** achievable — but only via the characteristic-graph cutoff
 edges (seam S7); without them a plain reverse-cone degrades to `O(|cone|)`.
 
-### Externalized-DCG shell (deferred — eval-server only)
-`dirty` / `clean` (Adapton lazy two-phase — amortized *only* with persistence) ·
-`gc` (only over the persisted DCG).
+### Externalized-DCG shell — OUT OF SCOPE (impure, different substrate)
+`dirty` / `clean` (amortized) · `gc` — *specified* for theory-completeness,
+realized only by a stateful eval-server (not built here). Cross-eval *result*
+reuse is the Nix store (constructive traces, pure).
 
 ---
 
@@ -93,7 +95,7 @@ edges (seam S7); without them a plain reverse-cone degrades to `O(|cone|)`.
 | **S6** order / time-stamp (monotone eval rank + insert-after + splice-span) | gen-scope | **Acar order-maintenance — splice correctness** |
 | **S7** containment-span + labeled-edge value store + **characteristic-graph transitive-summary edges** (+ a transitive-contraction primitive to build them) | gen-graph | Acar containment + Adapton per-edge value + **RTD `O(|AFFECTED|)` cutoff edges** (jump over unchanged subgraphs in unit time) |
 | **S8** bidirectional edge index (ordered outgoing + unordered incoming) | gen-graph | Adapton demand-ordered propagation |
-| **S9** externalized DCG + `gc` | harness / eval-server | the deferred persistence layer |
+| ~~**S9** externalized DCG + `gc`~~ | — | **OUT OF SCOPE** — impure cross-eval daemon (different substrate) |
 
 S1–S5 are intra-eval and pure. S6–S8 are pure but new structure. S9 is the
 external shell (eval-server).
