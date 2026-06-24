@@ -40,9 +40,9 @@ do (HC5).
 |---|---|---|
 | E1-D1 | **Vendor-and-own-the-seam**, *not* a from-scratch orchestration rewrite, *not* graph-native now | Owning the recursion seam (HC5) is the novel/risky part; the body's *content* is not. Verbatim vendor makes byte-identity near-tautological **by design**, isolating the seam as the single variable under test. From-scratch and graph-native both fight byte-identity with **no baseline to bisect against** (see §9). The vendored body is **not throwaway** — it is the permanent host substrate E3 edits in place. |
 | E1-D2 | **Own the body by `lib.extend` overriding `final.modules`** with a vendored `modules.nix` imported against `final` | `lib/default.nix:474` re-exports the entire module surface via `inherit (self.modules)`, so overriding `final.modules` propagates `evalModules`/`mkIf`/`mkMerge`/`mkOverride`/`filterOverrides`/… through the fixpoint. `final.types` is re-fixpointed against `final`, so `submoduleWith` reaches the vendored `evalModules` at `base`; the vendored file-local `extendModules` keeps every submodule re-entry inside the owned body (§3). |
-| E1-D3 | **Host `lib.types` + `type.merge` verbatim** — no hola merge code | HC3: the merge kernel is value-shape-dispatched, mutually recursive with `evalModules` (`submoduleWith.merge → base.extendModules → evalModules`), positional for same-priority merge, and throws. The vendored `modules.nix` calls it via `mergeDefinitions`/`final.types`; nothing to reimplement. |
+| E1-D3 | **Host `lib.types` + `type.merge` verbatim, *by reference*** — no hola merge code, and `types.nix` is **not** vendored in E1 | HC3: the merge kernel is value-shape-dispatched, mutually recursive with `evalModules` (`submoduleWith.merge → base.extendModules → evalModules`), positional for same-priority merge, and throws. E1 swaps **only** `modules.nix`; `final.types` is the **live** outer-lib `types.nix` re-fixpointed against `final` (so it reaches the vendored `evalModules` at `base` — §3.2 — while the merge *code* stays unmodified/un-owned). "Verbatim" = unmodified, not copied. **E3 implication:** if E3 needs to alter merge behavior it must *also* vendor `types.nix`; until then `type.merge` is hosted by-reference. |
 | E1-D4 | **Commit the vendored copy into the repo**, isolated under `lib/engine/vendor/` with its MIT `COPYING` + provenance `README` | True ownership + a file E3 can edit; honor nixpkgs' MIT license (attribution). Generating it at eval time would leave nothing to own/edit and would silently track upstream. |
-| E1-D5 | **Vendor from the harness's pinned nixpkgs input** (rev `567a49d`), byte-for-byte | At E1 the vendored copy `== ${nixpkgs}/lib/modules.nix`, so `vendor-check` (§7) passes trivially and `vanilla` (live `nixpkgs.lib`) `== engine` (vendored) holds. A future nixpkgs bump without re-vendoring is exactly the K9 migration `vendor-check` is designed to flag. |
+| E1-D5 | **Vendor from the corpus's *actual* nixpkgs input** (rev `567a49d`), byte-for-byte | The corpus's `vanilla` lib is `import ../. { lib = nixpkgs.lib; }` where `nixpkgs` is the ci flake's `outputs` input = `root.inputs.nixpkgs` = flake.lock node **`nixpkgs_7`** = rev `567a49d` (= store `z1mj0970…`). **Disambiguation (a reviewer tripped on this):** the lock *also* contains a node literally named `nixpkgs` (= `64c08a7`) which is a **transitive/gen** nixpkgs and is **not** what the corpus evaluates against — never key off `l.nodes.nixpkgs`. Vendoring 567a49d makes the vendored copy `== ${nixpkgs}/lib/modules.nix`, so `vendor-check` (§7) passes and `vanilla == engine`. A nixpkgs bump without re-vendoring is exactly the K9 migration `vendor-check` flags. |
 | E1-D6 | **Engine-parity is a new `compose.engineParity` + a gating `ci/tests/engine-parity.nix`**, plus a **non-vacuity probe** | Mirror the harness's proven `selfParity` shape (swap `identity`→`engine`); the probe (perturb the vendored copy → assert `engineParity` flips `false`) proves the gate bites on the *engine*, exactly as the harness's break-test proved `selfParity` non-vacuous. |
 | E1-D7 | **No `_prev` use in the overlay; override `modules` only** (not `evalModules` too) | Minimal, idiomatic: the top-level `evalModules` re-export already resolves to `final.modules.evalModules` through the fixpoint. Belt-and-suspenders double-override is redundant. |
 
@@ -138,12 +138,15 @@ later diffs attributable.
 | `lib/engine/vendor/COPYING` | **new** | nixpkgs MIT license (© 2003-2026 Eelco Dolstra and the Nixpkgs/NixOS contributors). |
 | `lib/engine/vendor/README.md` | **new** | Provenance: source rev, "vendored verbatim; bumps are a parity-gated K9 migration", pointer to `vendor-check`. |
 | `lib/engine/default.nix` | **new** | The `lib.extend` constructor + `{ lib; evalModules }` record (§3.1). |
-| `lib/adapter.nix` | **edit** | Replace the `# engine = …` placeholder (`adapter.nix:26`) with `engine = import ./engine { inherit lib; };`. |
+| `lib/adapter.nix` | **edit** | Replace the `# engine = …` placeholder (`adapter.nix:26`, whose comment shows the inline `{ lib = holaLib; evalModules = holaLib.evalModules; }`) with `engine = import ./engine { inherit lib; };` — `lib/engine/default.nix` returns exactly that record, so the two forms are equivalent. |
 | `lib/compose.nix` | **edit** | Add `engineParity = fx: …` — `vanilla` vs `engine` across value/drvPath/throws gates (mirror of `selfParity`). |
 | `ci/tests/engine-parity.nix` | **new** | `engineParity` over the full corpus (synthetic, 4 hc3 landmines, real-host drvPath) + the non-vacuity probe. Gate = all `true`. |
 | `ci/apps.nix` | **edit** | Add the non-gating `vendor-check` Tier-2 evidence app (§7). |
 
-`lib/types` / `type.merge` have **no hola file** — hosted verbatim via the vendored body.
+`lib/types` / `type.merge` have **no hola file and are not vendored in E1** — they are hosted
+**by-reference**: the live outer-lib `types.nix`, re-fixpointed against `final` so it reaches the
+vendored `evalModules` at submodule `base` (§3.2). "Verbatim" means unmodified, not copied.
+(E3 vendors `types.nix` only if it must alter merge behavior.)
 
 ## 6. Testing & the gate
 
@@ -153,6 +156,11 @@ later diffs attributable.
   `drvPath` → `drvEq`, `throws` → `expectThrowFx` both engines) exactly as `selfParity` does.
   Fixtures: `synthetic`, `priorityFold`, `order`, `valueMeta` (the reverse-`listOf` quirk),
   `latticeThrows`, `realHost` (drvPath, `n = 3`).
+  - **Throws-gate caveat (faithful to the harness):** `expectThrowFx` asserts *that* both engines
+    throw, not that the error *messages* are identical (`compose.nix:26`). For verbatim E1 the
+    message is identical by construction (same code throws the same string), so message-identity
+    holds for `latticeThrows` even though the gate does not separately assert it. Don't over-claim
+    message-tier identity from a passing throws gate; tightening it is a later option, not an E1 need.
 - **Non-vacuity probe** (gating): construct a deliberately-perturbed engine from a copy of the
   vendored body with one quirk flipped (e.g. drop the `reverseList` that produces the
   same-priority same-order `listOf` reverse order), and assert `engineParity` over `valueMeta`
@@ -165,9 +173,13 @@ later diffs attributable.
   harness's nixpkgs requires re-vendoring `modules.nix` and re-running the parity gate.**
 - `vendor/COPYING` reproduces nixpkgs' MIT text with attribution (honor the license).
 - **`nix run ci#vendor-check`** (Tier-2, non-gating, via the `extraModules` seam): diffs
-  `lib/engine/vendor/modules.nix` against `${nixpkgs}/lib/modules.nix`. **Byte-identical at E1**;
-  once E3 edits the body it reports "diverges in these documented ways." This surfaces silent
-  upstream drift without gating CI on an external moving target.
+  `lib/engine/vendor/modules.nix` against `${nixpkgs}/lib/modules.nix`, where `${nixpkgs}` is the
+  **resolved `outputs` input** (`nixpkgs.outPath`, already threaded as a specialArg), **not** a
+  rev string off a lock node — this is robust against the multi-`nixpkgs`-node lock (E1-D5) and
+  works whatever node key the lock assigns. **Byte-identical at E1**; once E3 edits the body it
+  reports "diverges in these documented ways." Surfaces silent upstream drift without gating CI on
+  an external moving target. A tiny gating companion assertion (`vendored == ${nixpkgs}/lib/modules.nix`
+  at E1) may live in `engine-parity.nix` to enforce the K9 rule mechanically while the body is verbatim.
 
 ## 8. Out of scope (explicit — no scope creep)
 
