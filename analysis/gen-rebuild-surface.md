@@ -9,8 +9,9 @@ Mokhov 2018 (rebuilder taxonomy) · Forgy 1982 (Rete deltas) · Radul 2009
 (provenance / retraction) · Arntzenius 2016 (semi-naive fixpoint) · **Acar 2002**
 (change propagation, splice, order-maintenance — `reference-catalog/`) ·
 **Hammer 2014 Adapton** (demand-driven DCG, dirty/clean, memo —
-`reference-catalog/`). **PENDING:** Reps–Teitelbaum–Demers 1983 (formal
-`dirtySet` minimality) — no open PDF; to be supplied.
+`reference-catalog/`) · **Reps–Teitelbaum–Demers 1983** (`dirtySet` minimality:
+the `O(|AFFECTED|)` optimality theorem + characteristic-graph transitive-summary
+edges — `reference-catalog/`). Corpus complete.
 
 ---
 
@@ -42,7 +43,7 @@ and the line lands exactly on the deferred eval-server track (H6):
 | op | theory | hola |
 |---|---|---|
 | `demand`/`force` — the pull trigger | Adapton (only recompute trigger); seam to gen-scope `self.get` | production |
-| `applyDelta` / `batch` — apply input change(s) | Forgy ±tokens · Acar `σ⊕δ`, N changes then 1 propagate | production |
+| `applyDelta` / `batch` — apply input change(s) | Forgy ±tokens · Acar `σ⊕δ`, N changes then 1 propagate; **RTD §5.5 region-seed** (one drain over the smallest connected region containing all inconsistencies, not per-key re-traversal) | production |
 | `propagate` — drain the frontier to quiescence | Acar §4.3 (standalone, *distinct* from override) | production |
 | `override` — fused single-change convenience (applyDelta+propagate) | Mokhov dirty-bit; **splice semantics grounded by Acar §4.5/§7** | **B-demo** |
 | `retract` — non-monotone delete | Radul `kick-out!` · Forgy `−` · Datafun deletion | production |
@@ -50,7 +51,10 @@ and the line lands exactly on the deferred eval-server track (H6):
 ### Rebuilder strategies (Mokhov §4.2 + §2.3)
 `verify` · `constructive` · `deepConstructive` · `earlyCutoff` — the last now
 **per-edge labeled** (Adapton Alg.1 l.12: value stored on each edge, prune
-mid-walk, finer than per-node).
+mid-walk, finer than per-node). Plus **`needsEval`** (RTD 1983 §5.3 *pre*-cutoff)
+— skip *calling* the node's compute fn unless a predecessor's value actually
+changed (complementary to `earlyCutoff`'s *post*-recompute compare; avoids the
+expensive eval, not just the propagation).
 
 ### Dependency-graph construction (Acar adg builders — make dep-recording first-class)
 `read` / `write` / `mod` (or gen-scope-native equivalents) — `read` records the
@@ -65,8 +69,11 @@ allocation — stable node identity across runs, prerequisite for swapping/switc
 `restabilize`.
 
 ### Helper
-`dirtySet` — cone minus obsolete-contained minus cutoffs (Acar |Iu|⊆|I|
-minimality; RTD-1983 grounding pending).
+`dirtySet` — cone minus obsolete-contained minus cutoffs. **Minimality grounded
+(RTD 1983 §4.3/§5.2):** AFFECTED = the attrs whose value *actually changes*,
+*discovered by* propagation (never precomputed); `O(|AFFECTED|)` is the proven
+lower bound **and** achievable — but only via the characteristic-graph cutoff
+edges (seam S7); without them a plain reverse-cone degrades to `O(|cone|)`.
 
 ### Externalized-DCG shell (deferred — eval-server only)
 `dirty` / `clean` (Adapton lazy two-phase — amortized *only* with persistence) ·
@@ -84,7 +91,7 @@ minimality; RTD-1983 grounding pending).
 | **S4** seeded / delta-frontier fixpoint | gen-graph | `restabilize` |
 | **S5** `hashOf` hook (consumer-supplied) | param | verify / constructive / cutoff |
 | **S6** order / time-stamp (monotone eval rank + insert-after + splice-span) | gen-scope | **Acar order-maintenance — splice correctness** |
-| **S7** containment-span + labeled-edge value store | gen-graph | Acar containment (|Iu| vs |I|) + Adapton per-edge cutoff value |
+| **S7** containment-span + labeled-edge value store + **characteristic-graph transitive-summary edges** (+ a transitive-contraction primitive to build them) | gen-graph | Acar containment + Adapton per-edge value + **RTD `O(|AFFECTED|)` cutoff edges** (jump over unchanged subgraphs in unit time) |
 | **S8** bidirectional edge index (ordered outgoing + unordered incoming) | gen-graph | Adapton demand-ordered propagation |
 | **S9** externalized DCG + `gc` | harness / eval-server | the deferred persistence layer |
 
@@ -109,11 +116,26 @@ all three and is *slower* than from-scratch).
 3. **Splice granularity** for a lazy `(nodeId, attr)` store — does Acar's
    O(|affected|) cost bound survive per-attribute granularity over a lazy
    memoized store?
-4. **`retract` / arbitrary `dirtySet`** have no clean Acar analogue (write-once
-   modifiables; monotone-growing change set) — gen-rebuild generalizations.
+4. **`retract` forfeits RTD's automatic deletion.** RTD gets deletion for free
+   *because* attribute flow is tree-only (RTD §7); gen-rebuild's flat store has
+   *nonlocal* edges, so it must engineer **explicit reverse-cone invalidation** on
+   delete (Acar's obsolete-edge splice-out is the mechanism). Also no clean Acar
+   analogue (write-once modifiables; monotone-growing change set).
 5. **Citation honesty:** Acar grounds the *re-execution* axis only (not
    verify/constructive/deepConstructive — those stay Mokhov); "purity" should be
    stated as *persistent closures* (Acar §8), not effect-freedom.
+6. **Lazy-optimality — RTD's hardest transfer limit (and the deepest one for
+   gen-rebuild's home turf).** RTD proves `O(|AFFECTED|)` for an **eager push**
+   *with* characteristic-graph cutoff edges. Whether minimality survives
+   gen-rebuild's native **demand-driven (lazy/pull)** recompute —
+   `O(|AFFECTED ∩ demanded|)` *without* those eager cutoff edges — is
+   **unresolved**. This is the precise seam where RTD's optimality stops
+   transferring, and it lands exactly on Nix/Adapton laziness.
+7. **Cyclic attrs are outside RTD's envelope.** RTD *requires* noncircularity
+   (the basis for topological order and the `O(|AFFECTED|)` bound); for
+   cyclic/fixpoint attrs (`restabilize`, gen-scope `circular`) both the bound and
+   the never-assign-a-non-final-value invariant break. `restabilize` is grounded
+   by Arntzenius, not RTD.
 
 ## Minimal-B subset (unchanged)
 `override` + `dirtySet` + `affected` + seam **S1**. Acyclic, single-change, pure
@@ -121,7 +143,7 @@ intra-eval, dirty-bit, no early cutoff. Demonstrates reuse-across-change.
 
 ---
 
-*Phase 1 (theory completion) output. Catalog additions: `reference-catalog/`
-`{pdf,markdown,summaries}/{acar-2002-adaptive-functional-programming,
-hammer-2014-adapton}`. Surface derived from those + the prior
-Mokhov/Forgy/Radul/Arntzenius grounding.*
+*Phase 1 (theory completion) output — corpus complete. Catalog additions:
+`reference-catalog/{pdf,markdown,summaries}/{acar-2002-adaptive-functional-programming,
+hammer-2014-adapton, reps-1983-incremental-context-dependent-analysis}`. Surface
+derived from those + the prior Mokhov/Forgy/Radul/Arntzenius grounding.*
