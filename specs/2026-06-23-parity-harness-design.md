@@ -150,7 +150,8 @@ fixture = {
   modules;              # the SAME unmodified nixpkgs-shaped modules fed to both engines
   specialArgs ? {};
   class ? null;         # "nixos" for hosts — held identical across A/B
-  pick    = config: …;  # force-safe projection (value tier): MUST return only
+  pick    = result: …;  # force-safe projection over the eval RESULT (reads result.config for the
+                        #   value tier; withOptionShape adds result.options data). MUST return only
                         #   strings/ints/bools + lists/attrsets thereof — no derivations/functions
   gate    = "value" | "drvPath" | "throws";
   expected ? null;      # consulted IFF gate=="value"; MUST be null for "throws"/"drvPath"
@@ -198,24 +199,38 @@ string case where it is literally true.
 
 ```nix
 engines = {
-  vanilla  = args: lib.evalModules args;     # reference
-  # identity: a lib.extend passthrough — byte-identical OUTPUT, but routes through the SAME override
-  # seam (and the submodule extendModules bypass, §4 HC5) the real engine arm will later replace.
-  identity = args: (lib.extend
-    (final: prev: { modules = prev.modules // { evalModules = a: prev.modules.evalModules a; }; })
-  ).evalModules args;
-  # engine = args: hola.evalModules args;    # ADDED in the engine increment (lib-shaped drop-in)
+  # Each engine carries its lib AND evalModules, so the host tier can thread the engine's
+  # (possibly extended) lib into eval-config — the seam the engine arm needs.
+  vanilla = { lib = lib; evalModules = lib.evalModules; };
+  # identity: a lib.extend passthrough — byte-identical OUTPUT, routes through the SAME override
+  # seam (and the submodule extendModules bypass, §4 HC5) the engine arm will replace.
+  identity =
+    let
+      elib = lib.extend (
+        final: prev: { modules = prev.modules // { evalModules = a: prev.modules.evalModules a; }; }
+      );
+    in
+    { lib = elib; evalModules = elib.evalModules; };
+  # engine = { lib = holaLib; evalModules = holaLib.evalModules; };  # engine increment (lib-shaped drop-in)
 };
 
-# applies the schema `?` defaults (inherit would THROW on an omitted optional field):
-run = engine: fx: engine ({ inherit (fx) modules; specialArgs = fx.specialArgs or {}; }
+# VALUE/synthetic/landmine tier — applies the schema `?` defaults (a bare inherit would THROW on an
+# omitted optional field); omits `class` when null so the vanilla default applies:
+run = engine: fx: engine.evalModules ({ inherit (fx) modules; specialArgs = fx.specialArgs or {}; }
   // (if (fx.class or null) == null then { } else { inherit (fx) class; }));
+
+# HOST tier (gate="drvPath") — dual-run through eval-config, threading the engine's lib so the
+# identity/engine override actually reaches the host evaluator (eval-config builds its evaluator from
+# its `lib` arg, NOT from lib.evalModules directly):
+runHost = engine: fx: import fx.evalConfig { inherit (engine) lib; system = "x86_64-linux"; modules = fx.modules; };
 ```
 
 `class = null` means the field is **omitted** from the `evalModules` args (vanilla default applies);
 only string classes (`"nixos"`) are forwarded. `lib` / `nixpkgs` injected via arg → fixtures portable
-(D7). The engine arm (later) is a lib-shaped drop-in capturing both `lib.modules.evalModules` and the
-submodule `extendModules` (§4, HC5).
+(D7). For this increment the only non-vanilla engine is `identity` (byte-identical), so the host tier is
+an **output-stability + lib-threading** check; full engine-through-`eval-config` validation is the
+engine increment's concern. The engine arm (later) is a lib-shaped drop-in carrying both
+`lib.modules.evalModules` and the submodule `extendModules` (§4, HC5).
 
 ## 8. Corpus (`lib/corpus/`)
 

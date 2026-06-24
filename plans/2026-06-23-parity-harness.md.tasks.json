@@ -1,0 +1,137 @@
+{
+  "planPath": "~/Documents/papers/hola-architecture/plans/2026-06-23-parity-harness.md",
+  "specPath": "~/Documents/papers/hola-architecture/specs/2026-06-23-parity-harness-design.md",
+  "note": "Native CC TaskCreate intentionally NOT used (pre-commit-check-tasks hook blocks commits while tasks open). This file + the plan checkboxes are the source of truth.",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 0: gen.lib.mkCi extraModules seam (prerequisite)",
+      "status": "pending",
+      "description": "Add `extraModules ? [ ]` to gen/ci/mkCi.nix signature; append to mkFlake imports. Backward-compatible. Commit + PUSH gen (hola CI consumes github:sini/gen).",
+      "metadata": {
+        "repo": "~/Documents/repos/gen",
+        "files": ["~/Documents/repos/gen/ci/mkCi.nix", "~/Documents/repos/gen/ci/tests/extramodules.nix"],
+        "verifyCommand": "cd ~/Documents/repos/gen && nix flake check; cd ~/Documents/repos/gen-rebuild/ci && nix flake check --override-input gen ~/Documents/repos/gen",
+        "acceptanceCriteria": ["extraModules threaded into mkFlake", "existing consumers unaffected", "push gen after green"]
+      }
+    },
+    {
+      "id": 1,
+      "subject": "Task 1: Scaffold hola repo (green skeleton)",
+      "status": "pending",
+      "blockedBy": [],
+      "description": "git init ~/Documents/repos/hola; leaf flake.nix/default.nix/lib stubs/ci flake/smoke test/boilerplate from gen-rebuild + gen-aspects leaf shape. Plain mkCi (no apps yet).",
+      "metadata": {
+        "repo": "~/Documents/repos/hola",
+        "files": ["flake.nix", "default.nix", "lib/default.nix", "lib/parity.nix", "lib/adapter.nix", "lib/corpus/default.nix", "lib/compose.nix", "ci/flake.nix", "ci/tests/smoke.nix", ".envrc", ".gitignore", "LICENSE", "README.md", ".github/workflows/ci.yml", ".github/FUNDING.yml"],
+        "verifyCommand": "cd ~/Documents/repos/hola/ci && nix flake check --override-input gen ~/Documents/repos/gen",
+        "acceptanceCriteria": ["smoke test green", "gen-canonical leaf layout"]
+      }
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: parity.nix force + diffAt + diff + locate",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "Structural order-sensitive throw-robust diff oracle (§6) + oracle.nix soundness tests (equal/differ/missing-key/list-order/length/nested/one-arm-throw/locate).",
+      "metadata": {
+        "repo": "~/Documents/repos/hola",
+        "files": ["lib/parity.nix", "ci/tests/oracle.nix"],
+        "verifyCommand": "cd ci && nix-unit --flake .#tests.oracle",
+        "acceptanceCriteria": ["key-union recursion + __absent sentinel", "list length-then-index order-sensitive", "tryEval each arm"]
+      }
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: parity.nix drvPathGate + expectThrow + withOptionShape",
+      "status": "pending",
+      "blockedBy": [2],
+      "description": "Host-tier gate (tryEval drvPath), did-throw expectThrow, option-shape pick-builder. Extend oracle.nix.",
+      "metadata": {
+        "repo": "~/Documents/repos/hola",
+        "files": ["lib/parity.nix", "ci/tests/oracle.nix"],
+        "verifyCommand": "cd ci && nix-unit --flake .#tests.oracle",
+        "acceptanceCriteria": ["drvPathGate tryEval per arm", "expectThrow returns !success", "withOptionShape augments pick"]
+      }
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: adapter.nix engines (records) + run + runHost",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "Engines as RECORDS { lib; evalModules }; run via engine.evalModules (applies ?-defaults, omits class when null); runHost threads engine.lib into eval-config for the host tier. identity = lib.extend passthrough (byte-identical).",
+      "metadata": {
+        "repo": "~/Documents/repos/hola",
+        "files": ["lib/adapter.nix", "ci/tests/adapter.nix"],
+        "verifyCommand": "cd ci && nix-unit --flake .#tests.adapter",
+        "acceptanceCriteria": ["engines are { lib; evalModules } records", "run applies specialArgs/class defaults", "identity byte-identical to vanilla via lib.extend", "runHost threads engine.lib into eval-config"]
+      }
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: corpus synthetic + landmines",
+      "status": "pending",
+      "blockedBy": [3, 4],
+      "description": "Port dual.nix (parameterized n/ndecls/layers) + hc3_* landmines with empirical `expected` (priorityFold->[c], latticeThrows throws). Registry. landmines.nix tests vs run vanilla + parity.expectThrow.",
+      "metadata": {
+        "repo": "~/Documents/repos/hola",
+        "files": ["lib/corpus/synthetic.nix", "lib/corpus/landmines.nix", "lib/corpus/default.nix", "ci/tests/landmines.nix"],
+        "verifyCommand": "cd ci && nix-unit --flake .#tests.landmines",
+        "acceptanceCriteria": ["priorityFold==[c]", "latticeThrows throws", "nixpkgs not baked into synthetic/landmines"]
+      }
+    },
+    {
+      "id": 6,
+      "subject": "Task 6: corpus real-host + floor (lib only)",
+      "status": "pending",
+      "blockedBy": [3, 4],
+      "description": "Port checktest.nix (eval-config, class=nixos, drvPath gate, evalConfig path, fsType REQUIRED, nixpkgs at mk-time) + bench_* H1 floor baselines (perf-only). LIB ONLY — real-host self-parity test moves to Task 7 (needs compose.runHost/drvEq). nixpkgs threaded in Task 1.",
+      "metadata": {
+        "repo": "~/Documents/repos/hola",
+        "files": ["lib/corpus/real-host.nix", "lib/corpus/floor.nix", "lib/corpus/default.nix"],
+        "verifyCommand": "cd ci && nix flake check --override-input gen ~/Documents/repos/gen",
+        "acceptanceCriteria": ["realHost fixture constructs (class=nixos, gate=drvPath, evalConfig, fsType)", "nixpkgs parameterized (no 2f4f625e)", "floor perf-only", "flake check green"]
+      }
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: compose.nix + self-parity gate",
+      "status": "pending",
+      "blockedBy": [3, 4, 5, 6],
+      "description": "Wire run+runHost+pick+oracle into valueEq/drvEq/expectThrowFx/selfParity (engine records; runHost threads engine.lib into eval-config; plain application not |>; defensive gate dispatch; picks receive full eval result). self-parity.nix over the parity corpus incl real-host drvPath.",
+      "metadata": {
+        "repo": "~/Documents/repos/hola",
+        "files": ["lib/compose.nix", "ci/tests/self-parity.nix"],
+        "verifyCommand": "cd ci && nix flake check --override-input gen ~/Documents/repos/gen",
+        "acceptanceCriteria": ["all suites green incl real-host drvPath self-parity", "expectThrowFx matches §6 engine:fx signature", "drvEq via runHost"]
+      }
+    },
+    {
+      "id": 8,
+      "subject": "Task 8: Tier-2 apps + bench + extraModules wiring",
+      "status": "pending",
+      "blockedBy": [0, 6, 7],
+      "description": "ci/apps.nix (perSystem.apps), bench/ writeShellApplications (stat-capture/scaling-curve/floor-decomp/parity-report), wire ci/flake.nix extraModules=[./apps.nix]. No measured number gates CI.",
+      "metadata": {
+        "repo": "~/Documents/repos/hola",
+        "files": ["ci/apps.nix", "ci/bench/stat-capture.sh", "ci/bench/scaling-curve.sh", "ci/bench/floor-decomp.sh", "ci/bench/parity-report.sh", "ci/bench/extract.jq", "ci/flake.nix"],
+        "verifyCommand": "cd ci && nix flake check --override-input gen ~/Documents/repos/gen; nix run ./ci#stat-capture -- synthetic",
+        "acceptanceCriteria": ["stat-capture emits JSON with field set + rev/version", "fixtures by registry name", "exit 0 evidence"]
+      }
+    },
+    {
+      "id": 9,
+      "subject": "Task 9: README API reference + finalize",
+      "status": "pending",
+      "blockedBy": [7, 8],
+      "description": "Fill README API Reference (parity/adapter/compose/corpus) + Theoretical Foundations table; record nixpkgs rev pin + engine-arm seam note.",
+      "metadata": {
+        "repo": "~/Documents/repos/hola",
+        "files": ["README.md"],
+        "verifyCommand": "cd ci && nix flake check",
+        "acceptanceCriteria": ["API reference complete", "mdformat clean"]
+      }
+    }
+  ],
+  "lastUpdated": "2026-06-23"
+}
