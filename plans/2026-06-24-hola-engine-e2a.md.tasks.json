@@ -4,7 +4,7 @@
     {
       "id": 0,
       "subject": "Task 0: Wire Den + import-tree as ci flake inputs",
-      "status": "pending",
+      "status": "completed",
       "description": "Add den + import-tree ci flake inputs; thread denCorpus={den,importTree,nixpkgsFlake} via specialArgs. Existing 38 tests unaffected.",
       "metadata": {
         "files": ["ci/flake.nix", "ci/flake.lock"],
@@ -19,7 +19,7 @@
     {
       "id": 1,
       "subject": "Task 1: Den-template fixture + runDenTemplate adapter",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [0],
       "description": "lib/corpus/den-template.nix (mk -> fx) + adapter.runDenTemplate (import raw template outputs, doctor inputs.nixpkgs.lib=engine.lib, return hostOf out) + register denTemplate in corpus/default.nix.",
       "metadata": {
@@ -35,7 +35,7 @@
     {
       "id": 2,
       "subject": "Task 2: Den-template parity gate (byte-identity proof)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1],
       "description": "ci/tests/den-parity.nix: drvPathGate{runDenTemplate vanilla, runDenTemplate engine}.identical==true. If not identical: real finding (spec §4), parity.locate, do NOT silence.",
       "metadata": {
@@ -49,5 +49,5 @@
       }
     }
   ],
-  "lastUpdated": "2026-06-24"
+  "lastUpdated": "2026-06-24T-e2a-complete"
 }

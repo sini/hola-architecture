@@ -6,19 +6,20 @@
     {
       "id": 0,
       "subject": "Task 0: gen.lib.mkCi extraModules seam (prerequisite)",
-      "status": "pending",
+      "status": "completed",
+      "note": "Code verified (RED->GREEN functionArgs probe, gen-rebuild override flake-check green). User committed+pushed gen (stale .git/hooks/pre-commit had blocked the coordinator). gen origin/main now carries the extraModules seam.",
       "description": "Add `extraModules ? [ ]` to gen/ci/mkCi.nix signature; append to mkFlake imports. Backward-compatible. Commit + PUSH gen (hola CI consumes github:sini/gen).",
       "metadata": {
         "repo": "~/Documents/repos/gen",
-        "files": ["~/Documents/repos/gen/ci/mkCi.nix", "~/Documents/repos/gen/ci/tests/extramodules.nix"],
-        "verifyCommand": "cd ~/Documents/repos/gen && nix flake check; cd ~/Documents/repos/gen-rebuild/ci && nix flake check --override-input gen ~/Documents/repos/gen",
-        "acceptanceCriteria": ["extraModules threaded into mkFlake", "existing consumers unaffected", "push gen after green"]
+        "files": ["~/Documents/repos/gen/ci/mkCi.nix"],
+        "verifyCommand": "nix eval --impure --expr '(builtins.functionArgs (import /home/sini/Documents/repos/gen/ci/mkCi.nix { inputs = {}; })) ? extraModules'  # => true; then cd ~/Documents/repos/gen-rebuild/ci && nix flake check --override-input gen ~/Documents/repos/gen",
+        "acceptanceCriteria": ["extraModules threaded into mkFlake imports", "functionArgs shows the arg", "gen-rebuild consumer flake-check green", "push gen after green (no committed test — gen has no nix-unit harness)"]
       }
     },
     {
       "id": 1,
       "subject": "Task 1: Scaffold hola repo (green skeleton)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [],
       "description": "git init ~/Documents/repos/hola; leaf flake.nix/default.nix/lib stubs/ci flake/smoke test/boilerplate from gen-rebuild + gen-aspects leaf shape. Plain mkCi (no apps yet).",
       "metadata": {
@@ -31,7 +32,7 @@
     {
       "id": 2,
       "subject": "Task 2: parity.nix force + diffAt + diff + locate",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1],
       "description": "Structural order-sensitive throw-robust diff oracle (§6) + oracle.nix soundness tests (equal/differ/missing-key/list-order/length/nested/one-arm-throw/locate).",
       "metadata": {
@@ -44,7 +45,7 @@
     {
       "id": 3,
       "subject": "Task 3: parity.nix drvPathGate + expectThrow + withOptionShape",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [2],
       "description": "Host-tier gate (tryEval drvPath), did-throw expectThrow, option-shape pick-builder. Extend oracle.nix.",
       "metadata": {
@@ -57,7 +58,7 @@
     {
       "id": 4,
       "subject": "Task 4: adapter.nix engines (records) + run + runHost",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1],
       "description": "Engines as RECORDS { lib; evalModules }; run via engine.evalModules (applies ?-defaults, omits class when null); runHost threads engine.lib into eval-config for the host tier. identity = lib.extend passthrough (byte-identical).",
       "metadata": {
@@ -70,7 +71,8 @@
     {
       "id": 5,
       "subject": "Task 5: corpus synthetic + landmines",
-      "status": "pending",
+      "status": "completed",
+      "note": "valueMeta expected CORRECTED to [2 1] (verified nixpkgs behavior: same-priority same-order listOf defs merge in reverse declaration order; my dispatched [1 2] was a transcription assumption). 21 tests green.",
       "blockedBy": [3, 4],
       "description": "Port dual.nix (parameterized n/ndecls/layers) + hc3_* landmines with empirical `expected` (priorityFold->[c], latticeThrows throws). Registry. landmines.nix tests vs run vanilla + parity.expectThrow.",
       "metadata": {
@@ -83,7 +85,7 @@
     {
       "id": 6,
       "subject": "Task 6: corpus real-host + floor (lib only)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [3, 4],
       "description": "Port checktest.nix (eval-config, class=nixos, drvPath gate, evalConfig path, fsType REQUIRED, nixpkgs at mk-time) + bench_* H1 floor baselines (perf-only). LIB ONLY — real-host self-parity test moves to Task 7 (needs compose.runHost/drvEq). nixpkgs threaded in Task 1.",
       "metadata": {
@@ -96,7 +98,8 @@
     {
       "id": 7,
       "subject": "Task 7: compose.nix + self-parity gate",
-      "status": "pending",
+      "status": "completed",
+      "note": "MILESTONE: self-validating contract green (29 tests), all 6 parity fixtures vanilla==identity incl real-host drvPath byte-identical. Proven non-vacuous (broken-identity probe flips selfParity to false). Dead // compose spread dropped (c3c309b).",
       "blockedBy": [3, 4, 5, 6],
       "description": "Wire run+runHost+pick+oracle into valueEq/drvEq/expectThrowFx/selfParity (engine records; runHost threads engine.lib into eval-config; plain application not |>; defensive gate dispatch; picks receive full eval result). self-parity.nix over the parity corpus incl real-host drvPath.",
       "metadata": {
@@ -109,7 +112,8 @@
     {
       "id": 8,
       "subject": "Task 8: Tier-2 apps + bench + extraModules wiring",
-      "status": "pending",
+      "status": "completed",
+      "note": "4 evidence apps build/run/exit-0 via gen extraModules seam; gen lock bumped to d65b213 (pushed seam, no override needed). scaling-curve linear (~2.0), floor-decomp shows //-storm. Deviations: --strict dropped (Lix compat; deepSeq forces), parity-report cwd-resolution.",
       "blockedBy": [0, 6, 7],
       "description": "ci/apps.nix (perSystem.apps), bench/ writeShellApplications (stat-capture/scaling-curve/floor-decomp/parity-report), wire ci/flake.nix extraModules=[./apps.nix]. No measured number gates CI.",
       "metadata": {
@@ -122,7 +126,7 @@
     {
       "id": 9,
       "subject": "Task 9: README API reference + finalize",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [7, 8],
       "description": "Fill README API Reference (parity/adapter/compose/corpus) + Theoretical Foundations table; record nixpkgs rev pin + engine-arm seam note.",
       "metadata": {
@@ -133,5 +137,7 @@
       }
     }
   ],
+  "status": "ALL TASKS COMPLETE",
+  "result": "hola parity harness built at ~/Documents/repos/hola (11 commits 1df93ee..b1d2a28); 29 tests green; self-validating contract proven (vanilla==identity incl real-host drvPath byte-identical); engine seam (adapter.engines.engine) proven ready by injection; 4 Tier-2 evidence apps; gen got the extraModules seam (pushed d65b213). Final review APPROVED. PUSHED public github:sini/hola (GitHub Actions CI runs nix flake check).",
   "lastUpdated": "2026-06-23"
 }

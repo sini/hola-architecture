@@ -4,7 +4,7 @@
     {
       "id": 0,
       "subject": "Task 0: Vendor the engine body (modules.nix + license + provenance)",
-      "status": "pending",
+      "status": "completed",
       "description": "Commit a verbatim copy of nixpkgs lib/modules.nix @ 567a49d under lib/engine/vendor/ with MIT COPYING + provenance README.",
       "metadata": {
         "files": ["lib/engine/vendor/modules.nix", "lib/engine/vendor/COPYING", "lib/engine/vendor/README.md"],
@@ -19,7 +19,7 @@
     {
       "id": 1,
       "subject": "Task 1: Engine constructor + adapter seam",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [0],
       "description": "mkEngine via lib.extend overriding final.modules with the vendored body; wire adapter.engines.engine; expose hola.engine; smoke test.",
       "metadata": {
@@ -35,7 +35,7 @@
     {
       "id": 2,
       "subject": "Task 2: engineParity + byte-identical corpus gate (load-bearing proof)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1],
       "description": "Add compose.engineParity (mirror selfParity, vanilla vs engine); gate over the full corpus incl real-host drvPath.",
       "metadata": {
@@ -50,7 +50,7 @@
     {
       "id": 3,
       "subject": "Task 3: Non-vacuity probe (prove the gate bites)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [2],
       "description": "modules.broken.nix wrapper re-reverses config.thing; export _brokenProbe; assert valueEq vanilla vs _brokenProbe on valueMeta == false.",
       "metadata": {
@@ -65,7 +65,7 @@
     {
       "id": 4,
       "subject": "Task 4: vendor-check evidence app + K9 vendored-integrity gate",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [2],
       "description": "ci/bench/vendor-check.sh diffs vendored vs $NIXPKGS/lib/modules.nix; register app in ci/apps.nix; gating vendor-integrity test (readFile equality) in engine-parity.nix.",
       "metadata": {
@@ -78,5 +78,5 @@
       }
     }
   ],
-  "lastUpdated": "2026-06-24"
+  "lastUpdated": "2026-06-24T-all-tasks-complete"
 }

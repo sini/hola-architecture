@@ -19,6 +19,13 @@ construction (an evaluator-layer problem, deferred to Lix/parallel-eval), so
 "faster than `lib.evalModules` on real configs" is explicitly **not** a headline
 claim. (See `analysis/experiments/cortex-profile/`.)
 
+**Perf re-pivot (2026-06-24, measured on cortex):** the ~50s is intrinsic, *but*
+**cross-scope eval-result sharing is the one pure-Nix perf lever** — the redundancy of
+N scopes (home-manager *users*, fleet *hosts*) re-evaluating identical module
+subtrees, which Determinate's parallel eval *parallelizes* but does not *dedupe*. That
+is the new **Phase 4.5 track** below. (Adopting Determinate is the separate
+evaluator-layer track; the two compose.)
+
 ---
 
 ## Phase 0 — Research & reframe ✅ DONE
@@ -100,6 +107,61 @@ future truth-maintenance lib), keeping gen-rebuild a faithful single-domain lib.
   hosts.
 - **Bounded by H6:** cross-edit incrementality (across `nix eval` invocations)
   needs a **persistent eval server** — see deferred tracks.
+
+## Phase 4.5 — Cross-scope eval-result sharing (the overlay-dedupe track)
+
+**Lever:** N scopes — home-manager *users*, fleet *hosts* — re-evaluate identical
+module subtrees from scratch. This is the one **pure-Nix** perf lever from the
+re-pivot: the redundancy Determinate's parallel eval *parallelizes* but never
+*dedupes*. Measured on cortex: home-manager (3 users) = ~46% of the eval (108M copies
+/ 2.7 GB / 15s), atop a separate `useGlobalPkgs=false` 3×-nixpkgs amplifier.
+
+**Zen premise corrected (verified vs zen source):** zen does **not** share evaluated
+results across scopes. Its 3–10× byte-identical is a *single-config* zen-vs-`lib.evalModules`
+result (intra-eval, from not paying `lib.evalModules`'s ~61k-primop base);
+"submodule-as-scope" = no recursive fixpoint per *nested* submodule **within one
+config**; its fleet-demo calls `lib.nixosSystem` once per host (fresh eval each). So
+cross-scope *result* sharing is genuinely **unbuilt** — even in zen. The mechanism
+that supplies it is **gen-rebuild's content-addressed memoized reuse**
+(`build`/`override`/`affectedSet`), hosted by the engine owning the `evalModules`
+call-site. (Zen's intra-config win is also *not* portable into verbatim
+`lib.evalModules` — it requires replacing the evaluator, i.e. the Phase-4 bet — and
+carries an O(N²) located-cycle term to avoid inheriting.)
+
+**Two layers (keep separate):**
+- **L1 — pkgs/overlay (config, no hola):** `useGlobalPkgs=false`
+  (`den/core/users/home-manager.nix`) makes each user re-`import nixpkgs`.
+  `useGlobalPkgs=true` collapses 3 → 1 in stock Nix — cheapest first win, but a **real
+  migration** (per-user overlays like fenix must move to a shared overlay; drvPaths
+  shift — measure, don't assume invariance).
+- **L2 — module-eval (the hola lever):** the HM module set is re-evaluated per user
+  regardless of pkgs. Seam: `home-manager/nixos/common.nix:26,142` —
+  `users = attrsOf (submoduleWith …)` runs one `lib.evalModules` **per user, zero
+  cross-key memo**. Injecting a pre-evaluated shared base + merging per-user deltas is
+  **impossible in stock Nix**; it needs **owning the evalModules call-site**
+  (`extendModules`-style base+delta) = the engine + gen-rebuild reuse.
+
+**Cortex prototype (proving ground — earlier/smaller than the Phase-5 fleet):** one
+machine, one heap, 3 scopes, gateable with the existing parity harness. Measured
+shared/delta: `will`=15 pkgs (pure roles.default base), `shuo`=18 (base+3),
+`sini`=275 (heavy delta) — 2/3 users ~95% shareable, `sini` mostly delta (win real but
+**bounded**). **Gate = 4 byte-identical drvPaths:** system `toplevel` (master) +
+per-user `home.activationPackage.drvPath`; baseline `NIX_SHOW_STATS` → apply → re-eval
+identical → compare nrThunks/wall/heap.
+
+**Milestones:**
+- **C0 (now, no hola):** L1 — `useGlobalPkgs=true` + reconcile overlays; measure the
+  pkgs-collapse; record the (deliberately shifted) new baseline. Independent of Phase 4.
+- **C1 (needs the engine, Phase 4):** L2 — evaluate the shared roles.default HM subtree
+  once, share across users via gen-rebuild reuse; gate byte-identical; measure dedupe.
+- **C2 (Phase 5):** generalize — N hosts has the *same* shape (`nixosSystem` per host ≡
+  `attrsOf submoduleWith` per user); L2 lifts to cross-host. Stacks on the Determinate
+  track (parallel eval × dedup compose).
+
+**Bound (honest):** capped by what's actually invariant across scopes (high
+`will`/`shuo`, low `sini`); L1 (pkgs) is the bigger immediate chunk but config-fixable;
+L2 (module-eval) is the novel hola contribution but bounded. **Deps:** gen-rebuild reuse
+(Phase 2) + engine owning evalModules + parity gate (Phase 4); C0 independent.
 
 ---
 

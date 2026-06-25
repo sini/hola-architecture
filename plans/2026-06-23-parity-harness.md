@@ -17,6 +17,7 @@
 - Commits: no `Co-Authored-By`, no bylines; stage specific files (never `git add -A`); format before committing (`cd ci && nix fmt`).
 - nixpkgs is **injected** (never hardcode the `2f4f625e` path/rev); pin + record it where measured (D7).
 - One concern per file; complete code below, not "add X".
+- **Verify via `cd ci && nix flake check`** (the authoritative `assertTests` gate — proven to fail with `FAIL <suite>.<test>` on any regression at any depth). Do **NOT** use `nix-unit --flake .#tests` as the gate — a confirmed nix-unit CLI quirk silently drops all but the first of hola's suites (false-green). For a single targeted test in dev, use the devshell `ci suite.test` command. (Task verify lines below that say `nix-unit --flake .#tests.X` → read as `nix flake check`.)
 
 ---
 
@@ -61,33 +62,23 @@ README.md · LICENSE · .envrc · .github/{workflows/ci.yml,FUNDING.yml} · .git
 
 **Files:**
 - Modify: `~/Documents/repos/gen/ci/mkCi.nix` (signature line 17–22; imports line 38–45)
-- Create: `~/Documents/repos/gen/ci/tests/extramodules.nix`
+
+> gen's own `ci/` has **no** nix-unit harness (plain flake-parts treefmt/devshell; no `ci/tests/`, no `flake.tests`) — the mkCi machinery is for *consumers*. So the seam is verified by an eval probe + the gen-rebuild consumer flake-check, **not** a committed test in gen.
 
 **Acceptance Criteria:**
-- [ ] `mkCi` accepts `extraModules ? [ ]`; modules in it are imported into `mkFlake`.
-- [ ] Existing consumers unaffected (gen + gen-rebuild flake checks still green).
-- [ ] A test proves an `extraModules`-supplied `perSystem.apps.<x>` surfaces on the result flake.
+- [ ] `mkCi` accepts `extraModules ? [ ]`; appended to the `mkFlake` imports.
+- [ ] `builtins.functionArgs` of the inner `mkCi` lambda contains `extraModules`.
+- [ ] Existing consumer unaffected (gen-rebuild ci flake-check green with the patched gen).
 
-**Verify:** `cd ~/Documents/repos/gen && nix flake check` → green; `cd ~/Documents/repos/gen-rebuild/ci && nix flake check --override-input gen ~/Documents/repos/gen` → green.
+**Verify:**
+- `nix eval --impure --expr '(builtins.functionArgs (import /home/sini/Documents/repos/gen/ci/mkCi.nix { inputs = {}; })) ? extraModules'` → `true`
+- `cd ~/Documents/repos/gen-rebuild/ci && nix flake check --override-input gen ~/Documents/repos/gen` → green
 
 **Steps:**
 
-- [ ] **Step 1: Write the failing regression test.** `ci/tests/extramodules.nix` — assert the inner `mkCi` lambda exposes the `extraModules` arg (a clean RED→GREEN on the signature). The load-bearing *integration* proof is the gen-rebuild `--override-input` flake-check in **Verify**.
+- [ ] **Step 1: RED probe.** Before patching, run the eval probe — it returns `false` (no `extraModules` arg yet). `import mkCi.nix { inputs = {}; }` returns the inner lambda without forcing `inputs.nixpkgs` (lazy), so `{}` is a fine stub:
 
-```nix
-{ inputs, ... }:
-let
-  mkCi = import ../mkCi.nix { inherit inputs; };
-in
-{
-  flake.tests.extramodules.has-seam = {
-    expr = (builtins.functionArgs mkCi) ? extraModules;
-    expected = true;
-  };
-}
-```
-
-Run: `cd ~/Documents/repos/gen/ci && nix-unit --flake .#tests.extramodules` → FAILS (no `extraModules` arg yet). (No `_empty` dir needed — `functionArgs` does not force `mkCi`'s body.)
+`nix eval --impure --expr '(builtins.functionArgs (import /home/sini/Documents/repos/gen/ci/mkCi.nix { inputs = {}; })) ? extraModules'` → `false`
 
 - [ ] **Step 2: Implement the seam.** Edit `ci/mkCi.nix`:
 
@@ -116,16 +107,16 @@ Run: `cd ~/Documents/repos/gen/ci && nix-unit --flake .#tests.extramodules` → 
 
 - [ ] **Step 3: Verify + commit + push.** Composition-safety per §14: `flakeModule.nix` sets no `perSystem.apps`, flake-parts' core `apps` is free → additive.
 
-Run: `cd ~/Documents/repos/gen && nix flake check` and `cd ~/Documents/repos/gen-rebuild/ci && nix flake check --override-input gen ~/Documents/repos/gen` → both green.
+Run: the eval probe → `true`; and `cd ~/Documents/repos/gen-rebuild/ci && nix flake check --override-input gen ~/Documents/repos/gen` → green.
 
 ```bash
 cd ~/Documents/repos/gen && nix fmt
-git add ci/mkCi.nix ci/tests/extramodules.nix
+git add ci/mkCi.nix
 git commit -m "feat(mkCi): add extraModules seam for consumer flake-parts modules"
 git push
 ```
 
-> hola's `ci/flake.nix` consumes `github:sini/gen`, so this must be **pushed** before hola CI is green. During local dev, hola CI can `--override-input gen ~/Documents/repos/gen`.
+> hola's `ci/flake.nix` consumes `github:sini/gen`, so this must be **pushed** before hola CI is green. During local dev, hola CI uses `--override-input gen ~/Documents/repos/gen`.
 
 ---
 

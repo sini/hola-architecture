@@ -30,7 +30,7 @@ engine"). Decided with the user: host progression **bitstream → blade → cort
 |---|---|---|
 | E2b-D1 | **Full-surface, pure, gating** — re-invoke nix-config's raw `outputs` with the host's channel input's `.lib` doctored to `engine.lib` + a lazy self-knot | Routes the host's WHOLE eval (den aspect resolution, `den.hosts`, host re-instantiation, the toplevel) through the engine. Pure (rev-locked `getFlake`), so it's a `nix flake check` gate, same tier as `den-parity`/`realHost`. |
 | E2b-D2 | **nix-config = committed `github:sini/nix-config` ci input** (rev-locked); validation-only | User: "github ref works — just for validation, not a long-term path." A rev-locked input makes `getFlake`/`.inputs` pure; the github ref lets the remote GitHub-Actions gate fetch it. Removable later. |
-| E2b-D3 | **One engine for all hosts; doctor the host's nixpkgs INPUT** (`nixpkgs-unstable` for bitstream, `nixpkgs-master` for blade/cortex) | `modules.nix`+`types.nix` are byte-identical across the two revs (verified), so the 567a49d engine faithfully reproduces each channel's module system. The only per-host knob is which `inputs.<name>.lib` to doctor. **The fixture carries `channelInput` (the nixpkgs INPUT name), which is NOT the den `channel` name** — bitstream's den channel is `"nixos-unstable"` but its input is `"nixpkgs-unstable"`; conflating them indexes a missing attr (blade/cortex's `"nixpkgs-master"` matches both, masking it). |
+| E2b-D3 | **One vendored body, re-seeded per channel** (`fleetEngineLib`); doctor the host's nixpkgs INPUT (`nixpkgs-unstable` for bitstream, `nixpkgs-master` for blade/cortex) | The engine is **re-instantiated on the host's channel lib** (`import ./engine { lib = channelLib; }`), so vanilla=identity reproduces the host's REAL build and the engine substitutes ONLY `modules.nix` on that same channel lib. `modules.nix`+`types.nix` are byte-identical across the revs (verified, E2b-D5), so the single vendored body is correct for both channels. **The fixture carries `channelInput` (the nixpkgs INPUT name), NOT the den `channel` name** — bitstream's den channel is `"nixos-unstable"` but its input is `"nixpkgs-unstable"`; conflating them indexes a missing attr (blade/cortex's `"nixpkgs-master"` matches both, masking it). |
 | E2b-D4 | **Host progression bitstream → blade → cortex, each a separate gate** | bitstream = smallest, zero pin distance (de-risk). blade = complex hardware (intel+nvidia-prime), NO microvm. cortex = + microvm guest (cortex-cuda). Increasing surface; isolate failures. |
 | E2b-D5 | **Engine UNCHANGED; channel-`modules.nix`-identity asserted** | E2b is corpus + adapter wiring only. Add a check that the vendored `modules.nix` ≡ BOTH `nixpkgs-unstable` and `nixpkgs-master` `lib/modules.nix` (currently identical) — so a future master/unstable `modules.nix` drift is caught (it would re-open the E2a-D5 pin ambiguity for master hosts). |
 
@@ -50,11 +50,16 @@ engine"). Decided with the user: host progression **bitstream → blade → cort
     };
 }
 
-# lib/adapter.nix — runDenFleet (channel-aware twin of runDenTemplate)
-runDenFleet = engine: fx:
+# lib/adapter.nix — runDenFleet is CHANNEL-SEEDED: the doctored lib is built from the HOST'S OWN
+# channel lib (NOT a global engine, which carries hola's root-nixpkgs 567a49d → a foreign-lib
+# build that is internally vanilla≡engine but is NOT the host's real build). `doctor : channelLib ->
+# lib`; vanilla = identity (the host's REAL build), engine = vendored-modules-on-the-channel-lib.
+fleetEngineLib = baseLib: (import ./engine { lib = baseLib; }).engine.lib;   # re-instantiate engine on baseLib
+runDenFleet = doctor: fx:
   let
     f   = fx.denFleet;
     nc  = f.nixConfig;                                  # rev-locked flake input → nc.inputs is pure
+    chan = nc.inputs.${f.channelInput};
     raw = import (nc.outPath + "/flake.nix");
     out = raw.outputs (nc.inputs // {
             # lazy self-knot: `self` is the ONE input getFlake does NOT supply (nc.inputs ? self == false),
@@ -62,20 +67,21 @@ runDenFleet = engine: fx:
             # `self.overlays.default` (nixpkgs.nix:16). So the knot must carry outPath/sourceInfo AND be
             # the lazy `out` fixpoint (to supply the `overlays` flake output). A bare `self = out` THROWS.
             self = out // { outPath = nc.outPath; inherit (nc) sourceInfo; };
-            ${f.channelInput} = nc.inputs.${f.channelInput} // { lib = engine.lib; };
+            ${f.channelInput} = chan // { lib = doctor chan.lib; };  # id ⇒ real build; fleetEngineLib ⇒ engine
           });
   in
     out.nixosConfigurations.${f.host};                  # carries .config.system.build.toplevel.drvPath
 ```
 
-**Empirically verified (spec-review ran it, pure):** bitstream (`channelInput = "nixpkgs-unstable"`)
-→ `70xb6lxav…-nixos-system-bitstream-…567a49d.drv` byte-identical vanilla≡engine; blade
-(`channelInput = "nixpkgs-master"`, SAME 567a49d engine) → `…-nixos-system-blade-…5e8ca42.drv`
-byte-identical. The lazy `outPath`-carrying self-knot is load-bearing (a static carrier throws
-`overlays missing`).
+**Empirically verified (pure, channel-seeded):** the **vanilla (identity) arm reproduces each host's
+REAL build** — bitstream `70xb6lxav…-bitstream-…567a49d.drv` (= `nc.nixosConfigurations.bitstream`),
+blade `z1j54phn…-blade-…5e8ca42.drv` (= the real master-channel build) — and the **engine arm is
+byte-identical to it** on bitstream + blade. (The earlier global-`engines.engine` form produced an
+artificial `10vgh8b8…` build, not the real one — that's why channel-seeding is required.) The lazy
+`outPath`-carrying self-knot is load-bearing (a static carrier throws `overlays missing`).
 
 The gate (`ci/tests/den-fleet-parity.nix`) asserts, per host,
-`(parity.drvPathGate { a = runDenFleet vanilla fx; b = runDenFleet engine fx; }).identical == true`
+`(parity.drvPathGate { a = runDenFleet (l: l) fx; b = runDenFleet fleetEngineLib fx; }).identical == true`
 — direct `drvPathGate` (NOT `compose.engineParity`, which hardwires `runHost`), exactly as E2a's
 `den-parity` does.
 
