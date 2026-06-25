@@ -17,7 +17,7 @@ engine"). Decided with the user: host progression **bitstream → blade → cort
 **Empirical recon (nix-config @ `8f84aa62`, all pure eval):**
 - `flake.nix:6` `outputs = inputs: flake-parts.lib.mkFlake { inherit inputs; } (import-tree ./modules)` — plain `inputs`, **re-invokable**.
 - Host toplevel built by **den** via the per-channel seam `modules/den/schema/host.nix:116-141`: `nixos-unstable → inputs.nixpkgs-unstable.lib.nixosSystem`, `nixpkgs-master → inputs.nixpkgs-master.lib.nixosSystem`. So lib enters via **`inputs.<channel>.lib`**, NOT `inputs.nixpkgs.lib` (26.05 stable) and NOT flake-parts `nixpkgs-lib`.
-- `inputs.self` on the toplevel path is used only as a **path base** (`secretPath`/`facts`, `host.nix:391-392`); self-referential `self.nixosConfigurations` reads live in *other* outputs (agenix/nixidy). ⇒ a **lazy self-knot** suffices (`out = outputs (inputs // { self = out; })`).
+- `inputs.self` is the **one input `getFlake` does NOT supply** (`nc.inputs ? self == false`) and `mkFlake` requires it. On the toplevel path it is BOTH string-coerced (`self + "/.secrets/…"`, `host.nix:391`) AND forced as `self.overlays.default` (`nixpkgs.nix:16`). ⇒ the knot must be the **lazy `out` fixpoint carrying `outPath`/`sourceInfo`**: `self = out // { outPath = nc.outPath; inherit (nc) sourceInfo; }`. (A bare `self = out` throws on string-coercion; a static `{ outPath = …; }` carrier throws `overlays missing`. The lazy carrier supplies both — verified.) No `self.nixosConfigurations.<other>` cross-host force was found on the toplevel path, so the lazy knot suffices (no full fixed-point needed).
 - Hosts + channels (drv-name-confirmed): **bitstream**=`nixos-unstable`=`567a49d`; **blade**,**cortex**=`nixpkgs-master`=`5e8ca42`. Pure eval, no IFD (facter via `reportPath`), secrets are store-path refs not forced by the toplevel.
 
 **Two facts that make this pure + single-engine:**
@@ -30,7 +30,7 @@ engine"). Decided with the user: host progression **bitstream → blade → cort
 |---|---|---|
 | E2b-D1 | **Full-surface, pure, gating** — re-invoke nix-config's raw `outputs` with the host's channel input's `.lib` doctored to `engine.lib` + a lazy self-knot | Routes the host's WHOLE eval (den aspect resolution, `den.hosts`, host re-instantiation, the toplevel) through the engine. Pure (rev-locked `getFlake`), so it's a `nix flake check` gate, same tier as `den-parity`/`realHost`. |
 | E2b-D2 | **nix-config = committed `github:sini/nix-config` ci input** (rev-locked); validation-only | User: "github ref works — just for validation, not a long-term path." A rev-locked input makes `getFlake`/`.inputs` pure; the github ref lets the remote GitHub-Actions gate fetch it. Removable later. |
-| E2b-D3 | **One engine for all hosts; doctor the host's CHANNEL input** (`nixpkgs-unstable` for bitstream, `nixpkgs-master` for blade/cortex) | `modules.nix`+`types.nix` are byte-identical across the two revs (verified), so the 567a49d engine faithfully reproduces each channel's module system. The only per-host knob is which `inputs.<channel>.lib` to doctor. |
+| E2b-D3 | **One engine for all hosts; doctor the host's nixpkgs INPUT** (`nixpkgs-unstable` for bitstream, `nixpkgs-master` for blade/cortex) | `modules.nix`+`types.nix` are byte-identical across the two revs (verified), so the 567a49d engine faithfully reproduces each channel's module system. The only per-host knob is which `inputs.<name>.lib` to doctor. **The fixture carries `channelInput` (the nixpkgs INPUT name), which is NOT the den `channel` name** — bitstream's den channel is `"nixos-unstable"` but its input is `"nixpkgs-unstable"`; conflating them indexes a missing attr (blade/cortex's `"nixpkgs-master"` matches both, masking it). |
 | E2b-D4 | **Host progression bitstream → blade → cortex, each a separate gate** | bitstream = smallest, zero pin distance (de-risk). blade = complex hardware (intel+nvidia-prime), NO microvm. cortex = + microvm guest (cortex-cuda). Increasing surface; isolate failures. |
 | E2b-D5 | **Engine UNCHANGED; channel-`modules.nix`-identity asserted** | E2b is corpus + adapter wiring only. Add a check that the vendored `modules.nix` ≡ BOTH `nixpkgs-unstable` and `nixpkgs-master` `lib/modules.nix` (currently identical) — so a future master/unstable `modules.nix` drift is caught (it would re-open the E2a-D5 pin ambiguity for master hosts). |
 
@@ -40,10 +40,13 @@ engine"). Decided with the user: host progression **bitstream → blade → cort
 # lib/corpus/den-fleet.nix  (sketch)
 { lib }:
 {
-  mk = { nixConfig, host, channel }:   # nixConfig = the committed nix-config flake input
+  # channelInput = the nixpkgs INPUT NAME to doctor (e.g. "nixpkgs-unstable"), which is DISTINCT
+  # from the den `channel` name on the host (bitstream's den channel is "nixos-unstable" but the
+  # input is "nixpkgs-unstable"; blade/cortex use "nixpkgs-master" for both, which masked this).
+  mk = { nixConfig, host, channelInput }:   # nixConfig = the committed nix-config flake input
     {
       gate = "drvPath";
-      denFleet = { inherit nixConfig host channel; };
+      denFleet = { inherit nixConfig host channelInput; };
     };
 }
 
@@ -54,12 +57,22 @@ runDenFleet = engine: fx:
     nc  = f.nixConfig;                                  # rev-locked flake input → nc.inputs is pure
     raw = import (nc.outPath + "/flake.nix");
     out = raw.outputs (nc.inputs // {
-            self = out;                                 # lazy self-knot
-            ${f.channel} = nc.inputs.${f.channel} // { lib = engine.lib; };
+            # lazy self-knot: `self` is the ONE input getFlake does NOT supply (nc.inputs ? self == false),
+            # and the toplevel both string-coerces it (host.nix:391 `self + "/.secrets/…"`) AND forces
+            # `self.overlays.default` (nixpkgs.nix:16). So the knot must carry outPath/sourceInfo AND be
+            # the lazy `out` fixpoint (to supply the `overlays` flake output). A bare `self = out` THROWS.
+            self = out // { outPath = nc.outPath; inherit (nc) sourceInfo; };
+            ${f.channelInput} = nc.inputs.${f.channelInput} // { lib = engine.lib; };
           });
   in
     out.nixosConfigurations.${f.host};                  # carries .config.system.build.toplevel.drvPath
 ```
+
+**Empirically verified (spec-review ran it, pure):** bitstream (`channelInput = "nixpkgs-unstable"`)
+→ `70xb6lxav…-nixos-system-bitstream-…567a49d.drv` byte-identical vanilla≡engine; blade
+(`channelInput = "nixpkgs-master"`, SAME 567a49d engine) → `…-nixos-system-blade-…5e8ca42.drv`
+byte-identical. The lazy `outPath`-carrying self-knot is load-bearing (a static carrier throws
+`overlays missing`).
 
 The gate (`ci/tests/den-fleet-parity.nix`) asserts, per host,
 `(parity.drvPathGate { a = runDenFleet vanilla fx; b = runDenFleet engine fx; }).identical == true`
@@ -73,7 +86,7 @@ nix-config's full flake-parts/dendritic + den machinery — the strongest pre-Wa
 unknowns (the harness is the backstop; a divergent `toplevel.drvPath` localizes via `parity.locate`,
 and is interpreted under E2b-D5's vendored≡channel-`modules.nix` identity, so a divergence is an
 unambiguous engine-or-Den-lib-escape, not rev drift):
-- **Self-knot sufficiency:** recon found no `self.nixosConfigurations.<other>` force on the toplevel path, so a *lazy* knot should suffice; if a host forces a cross-host self ref, the knot must be made lazier or the host deferred.
+- **Self-knot sufficiency:** the lazy `outPath`-carrying knot (§3) is **verified byte-identical on bitstream AND blade**; no `self.nixosConfigurations.<other>` cross-host force was found on the toplevel path. If some host forces a cross-host self ref, the knot must be made lazier or that host deferred.
 - **cortex microvm guest:** the cortex-cuda microvm sub-eval is a fresh evalModules — it runs on the doctored channel lib too (module-arg `lib`), so it *should* be owned, but cortex is the last gate precisely to surface this.
 
 ## 5. Components / files
@@ -108,7 +121,7 @@ Engine (`lib/engine/**`) unchanged. Optionally extend `vendor-integrity` (or a n
 | **Channel `modules.nix` drift** (master vs unstable diverge in future). | E2b-D5 asserts vendored ≡ both channels' `modules.nix`; a drift fails that check, flagging the need for a channel-rev engine before trusting master-host parity. |
 | **nix-config not public / GitHub-Actions can't fetch.** | `github:sini/nix-config` must be pushed/public for the remote gate; local runs work against the committed lock regardless. Validation-only, so a local-only gate is acceptable if the repo stays private. |
 | **Heavy eval (cortex) time/memory** in CI. | drvPath eval only (no build); cortex is the last increment and can be a `nix run` evidence variant if CI-time is a concern (but pure-gating is the default). |
-| **`raw.outputs` needs an input the doctor omits.** | `nc.inputs` supplies the FULL resolved set; the runner only *overrides* `self` + the one channel input. Nothing omitted. |
+| **`raw.outputs` needs an input the doctor omits.** | `nc.inputs` supplies the full resolved set EXCEPT `self` (the one input `getFlake` omits, `nc.inputs ? self == false`) — the lazy `outPath`-carrying knot provides it. The runner otherwise only *overrides* the one channel input. Verified: nothing else omitted (bitstream+blade eval clean). |
 
 ## 9. References
 
