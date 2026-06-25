@@ -4,7 +4,7 @@
     {
       "id": 0,
       "subject": "Task 0: Wire nix-config as committed ci flake input",
-      "status": "pending",
+      "status": "completed",
       "description": "Add github:sini/nix-config ci input (rev-locked); thread denFleet={nixConfig=inputs.nix-config} specialArg. Verify it exposes .inputs (both channels) + .outPath.",
       "metadata": {
         "files": ["ci/flake.nix", "ci/flake.lock"],
@@ -19,7 +19,7 @@
     {
       "id": 1,
       "subject": "Task 1: den-fleet fixture + runDenFleet + bitstream gate",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [0],
       "description": "lib/corpus/den-fleet.nix (mk) + adapter.{fleetEngineLib, runDenFleet} CHANNEL-SEEDED (runDenFleet doctor: fx; doctor=channelLib->lib; vanilla=identity=host REAL build; engine=fleetEngineLib=import ./engine {lib=channelLib}).engine.lib; lazy self=out//{outPath;sourceInfo}) + register denFleet + ci/tests/den-fleet-parity.nix (bitstream gate: a=runDenFleet (l:l); b=runDenFleet fleetEngineLib + channel-modules-identity guard).",
       "metadata": {
