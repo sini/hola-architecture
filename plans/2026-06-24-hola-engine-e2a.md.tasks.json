@@ -1,0 +1,53 @@
+{
+  "planPath": "plans/2026-06-24-hola-engine-e2a.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 0: Wire Den + import-tree as ci flake inputs",
+      "status": "pending",
+      "description": "Add den + import-tree ci flake inputs; thread denCorpus={den,importTree,nixpkgsFlake} via specialArgs. Existing 38 tests unaffected.",
+      "metadata": {
+        "files": ["ci/flake.nix", "ci/flake.lock"],
+        "verifyCommand": "cd ci && nix flake lock && nix flake check",
+        "acceptanceCriteria": [
+          "ci/flake.nix declares inputs.den (pinned) + inputs.import-tree",
+          "corpus receives denCorpus={den,importTree,nixpkgsFlake} via specialArgs",
+          "existing 38 tests still green; nixpkgs stays 567a49d"
+        ]
+      }
+    },
+    {
+      "id": 1,
+      "subject": "Task 1: Den-template fixture + runDenTemplate adapter",
+      "status": "pending",
+      "blockedBy": [0],
+      "description": "lib/corpus/den-template.nix (mk -> fx) + adapter.runDenTemplate (import raw template outputs, doctor inputs.nixpkgs.lib=engine.lib, return hostOf out) + register denTemplate in corpus/default.nix.",
+      "metadata": {
+        "files": ["lib/corpus/den-template.nix", "lib/adapter.nix", "lib/corpus/default.nix"],
+        "verifyCommand": "cd ci && nix eval --impure --expr 'let f=builtins.getFlake (toString ./.); np=f.inputs.nixpkgs; hola=import ../. {lib=np.lib;}; dc={den=f.inputs.den;importTree=f.inputs.import-tree;nixpkgsFlake=np;}; fx=hola.corpus.denTemplate.mk dc; in (hola.adapter.runDenTemplate hola.adapter.engines.engine fx).config.system.build.toplevel.drvPath'",
+        "acceptanceCriteria": [
+          "corpus.denTemplate.mk returns gate=drvPath fx with template/host/inputs data",
+          "runDenTemplate vanilla & engine each yield .config.system.build.toplevel.drvPath (.drv)",
+          "doctoring total: inputs.nixpkgs=nixpkgsFlake//{lib=engine.lib}, inputs {nixpkgs,import-tree,den}, no self-knot"
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: Den-template parity gate (byte-identity proof)",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "ci/tests/den-parity.nix: drvPathGate{runDenTemplate vanilla, runDenTemplate engine}.identical==true. If not identical: real finding (spec §4), parity.locate, do NOT silence.",
+      "metadata": {
+        "files": ["ci/tests/den-parity.nix"],
+        "verifyCommand": "cd ci && nix flake check",
+        "acceptanceCriteria": [
+          "den-parity.den-template asserts drvPathGate{runDenTemplate vanilla, runDenTemplate engine}.identical==true",
+          "nix flake check green, test count -> 39",
+          "if not identical: report finding via parity.locate, do NOT mark complete with red gate"
+        ]
+      }
+    }
+  ],
+  "lastUpdated": "2026-06-24"
+}
