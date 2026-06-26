@@ -122,7 +122,11 @@ Expected: with enable on, N synth host names; identity attrs distinct across two
   **commit `synthFleet.enable = true` + the default `classes` on the worktree branch** (a single
   committed `modules/den/synth/_enable.nix`), so every script has a stable target. The
   "default-OFF / real fleet unchanged" guarantee is the **module default** in `options.nix`,
-  verified by AC-1's off-diff (eval with the enable file removed). Do NOT rely on per-run overlays.
+  verified by AC-1's off-diff. **Off-diff procedure:** `git stash push modules/den/synth/_enable.nix`
+  (temp-remove), eval `.#nixosConfigurations` attr names, `git stash pop` — assert only
+  axon-01/02/03 present without it. Confirm `_enable.nix` (and the whole `modules/den/synth/` tree)
+  is reached by the repo's `import-tree ./modules` so `enable=true` actually takes effect. Do NOT
+  rely on per-run overlays.
 
 ---
 
@@ -227,7 +231,12 @@ nix eval <flags> --apply 'builtins.attrNames' \
 
 **Notes / risk:** this is the spec's highest-uncertainty task. If agenix-rekey can't be scoped to
 synth hosts cleanly, fall back to a **fixed shared dummy secret set** (one rekeyed value reused as
-every secret's source) — still NO aspect removal. Document whichever path is taken.
+every secret's source) — still NO aspect removal. Document whichever path is taken. **If the
+fallback is taken, it couples to Task 8b fidelity:** a shared secret source makes ciphertext
+class-invariant, dropping the ssh-host-key→`age` facter contribution out of `facterPaths` →
+`varied-core` over-credited on the secrets axis. disko/networking still give non-empty
+`facterPaths` so the qualitative result holds, but Task 11's report MUST caveat that per-host
+secret-ciphertext variance is then unmeasured.
 
 ---
 
@@ -470,10 +479,11 @@ sharing).
       - `idFacterPaths = cross-host value-diff in varied-facter` (identity ∪ facter vary).
       - **`facterPaths = idFacterPaths − idPaths`**; `core = allInConePaths − idFacterPaths`.
 - [ ] **Comparison surface pinned (no whole-config `toJSON` — functions/derivations don't
-      serialize, memory caveat):** compare **per-aspect sub-derivation drvPaths** and/or **hashed
-      leaf values** over the same in-cone subtrees Task 3b deepSeqs (`builtins.hashString` of a
-      `deepSeq`-forced leaf, or `.drvPath` of each `systemd.services.<x>` / `environment.etc.<x>`),
-      pairwise between two same-class hosts.
+      serialize, memory caveat):** **prefer rendered-derivation drvPaths** —
+      `systemd.units."<x>.service".unit.drvPath`, `environment.etc.<x>.source.drvPath` — clean
+      string comparison, pairwise between two same-class hosts. **`builtins.hashString` of a
+      `deepSeq`-forced leaf THROWS if the leaf is a function** (option trees contain functions), so
+      use it only for known-scalar leaves; default to the drvPath route for any structured subtree.
 - [ ] Reports BOTH regimes: `shared-facter core` (the invariance **ceiling**) and `varied-facter
       core` (the realistic number); **varied core < shared core** (the §1/#1 point — a shared
       profile over-credits the core). The **joint-function assumption** (no in-cone path is a joint
@@ -493,7 +503,12 @@ shared core` strictly.
 
 **Notes / risk:** the pair-based diff assumes the two sampled same-class hosts differ ONLY by
 axis/facter (true by construction — same class key). If a class has >2 members, use the union of
-pairwise value-diffs to avoid missing a path that happens to agree on one pair.
+pairwise value-diffs to avoid missing a path that happens to agree on one pair. **`core` and the
+`varied core < shared core` headline are ROBUST to joint (identity×facter) paths** — `core = all −
+idFacterPaths` excludes any path that varies for any reason, and `shared−varied core = facterPaths`
+exactly (joint paths cancel). Only the identity-vs-facter SUB-attribution of a truly-joint path is
+sensitive; **`disko` is the concrete likely joint path** (entity `device_id` AND facter disk-facts
+both feed it — Issue-6) — name it in the report's joint-function caveat, not as hypothetical.
 
 ---
 
@@ -557,8 +572,8 @@ projection from the pipe policies; test on the synth fleet. If blocked, write th
 
 **Goal:** Run the full sweep and capture the substrate's reference numbers durably.
 
-**Files:** Create `synth-measure/baseline.sh` (orchestrates Tasks 6–9 across the sweep); Create the
-report + raw stats under papers `analysis/experiments/synthetic-fleet/`.
+**Files:** Create `synth-measure/baseline.sh` (orchestrates Tasks 6–10 incl 8a/8b across the
+sweep); Create the report + raw stats under papers `analysis/experiments/synthetic-fleet/`.
 
 **Acceptance Criteria:**
 - [ ] Sweep N∈{10,50,100}, K (≥3 via class distribution), cone∈{light,heavy,host-varying,empty},
@@ -571,8 +586,12 @@ report + raw stats under papers `analysis/experiments/synthetic-fleet/`.
       + varied realistic), **both** exact and near-class ratios, the parity-oracle result per class,
       force-counts, and the provenance result-or-slip.
 - [ ] The throwaway branch patch + raw stats JSON committed alongside (as in step-1 evidence).
+- [ ] **Content-shareability (8a/8b share ratios — a `drvPath` magnitude) and eval-perf (Task 6
+      eval-stat curves) are presented as SEPARATE sections** — never conflate the content
+      share-ratio with an eval-perf saving (the `drvPath ≠ eval-shared` caveat governs).
 - [ ] **Every honest caveat carried into the report** (throws-OBSERVED ceiling, 1a force-depth
-      coverage ceiling, joint-function assumption, drvPath≠eval-shared).
+      coverage ceiling, joint-function assumption incl. **disko** named, drvPath≠eval-shared, and
+      the Task-2-secret-fallback caveat **if** that fallback was taken).
 
 **Verify:** `bash synth-measure/baseline.sh && ls analysis/experiments/synthetic-fleet/` → report +
 stats present; numbers populated; caveats section present.
