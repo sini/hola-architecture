@@ -1,0 +1,119 @@
+diff --git a/modules/den/aspects/services/backup/persist-claims-demo.nix b/modules/den/aspects/services/backup/persist-claims-demo.nix
+new file mode 100644
+index 00000000..afcba327
+--- /dev/null
++++ b/modules/den/aspects/services/backup/persist-claims-demo.nix
+@@ -0,0 +1,34 @@
++# THROWAWAY DEMO (fleet build-order step 1) — the first OPEN cross-host emit in
++# this tree. Every existing emit (k3s-nodes, bgp-peers, host-addrs,
++# resolved-users) reads only the ENTITY record (host.*/user.*); this one reads
++# the producing peer's RESOLVED nixos `config` — making it config-dependent
++# (resolve.nix:392 `(functionArgs emit) ? config`) and therefore Tier-2/open.
++#
++# Rides services.bgp.spoke (axon-only), where frr is enabled, so
++# `config.users.users.frr.uid` resolves to the deterministic 978 on every axon
++# host. The `nixos` consumer surfaces the collected claims so the cross-host
++# collect actually fires and the result is evaluable for the M1/M2/M3 measurement.
++# Spec: papers/hola-architecture/specs/2026-06-26-fleet-open-emit-demo-design.md
++{ den, ... }:
++{
++  den.aspects.services.backup.persist-claims-demo = {
++    # OPEN emit: `{ host, config, ... }` ⇒ config-dependent ⇒ hasAnyConfigThunk
++    # ⇒ den resolves it against the producer host's resolved config (B′).
++    # `config` here = the PRODUCING peer's nixosSystem config.
++    persist-claims =
++      { host, config, ... }:
++      {
++        host = host.name;
++        path = "/persist/${host.name}/frr";
++        uid = config.users.users.frr.uid; # resolved peer config (978, deterministic) ⇒ Tier-2 read
++      };
++
++    # Consumer: read the collected (local + peer) claims and surface them, so the
++    # scoped collect is demanded (Nix laziness ⇒ nothing forces otherwise).
++    nixos =
++      { persist-claims, ... }:
++      {
++        environment.etc."persist-claims-demo.json".text = builtins.toJSON persist-claims;
++      };
++  };
++}
+diff --git a/modules/den/hosts/axon-01.nix b/modules/den/hosts/axon-01.nix
+index 772f4409..119dd4e2 100644
+--- a/modules/den/hosts/axon-01.nix
++++ b/modules/den/hosts/axon-01.nix
+@@ -55,6 +55,7 @@
+       roles.unlock
+       roles.nix-builder
+       services.bgp.spoke
++      services.backup.persist-claims-demo # THROWAWAY open-emit demo (step 1)
+       services.bgp.cilium-bgp
+       services.k3s
+       services.storage.media-scratch
+diff --git a/modules/den/hosts/axon-02.nix b/modules/den/hosts/axon-02.nix
+index 66fdc3d6..5a4d71cb 100644
+--- a/modules/den/hosts/axon-02.nix
++++ b/modules/den/hosts/axon-02.nix
+@@ -55,6 +55,7 @@
+       roles.unlock
+       roles.nix-builder
+       services.bgp.spoke
++      services.backup.persist-claims-demo # THROWAWAY open-emit demo (step 1)
+       services.bgp.cilium-bgp
+       services.k3s
+       hardware.cpu.amd
+diff --git a/modules/den/hosts/axon-03.nix b/modules/den/hosts/axon-03.nix
+index 72fc3699..9277025a 100644
+--- a/modules/den/hosts/axon-03.nix
++++ b/modules/den/hosts/axon-03.nix
+@@ -55,6 +55,7 @@
+       roles.unlock
+       roles.nix-builder
+       services.bgp.spoke
++      services.backup.persist-claims-demo # THROWAWAY open-emit demo (step 1)
+       services.bgp.cilium-bgp
+       services.k3s
+       hardware.cpu.amd
+diff --git a/modules/den/policies/persist-claims-demo-pipes.nix b/modules/den/policies/persist-claims-demo-pipes.nix
+new file mode 100644
+index 00000000..ac7d027a
+--- /dev/null
++++ b/modules/den/policies/persist-claims-demo-pipes.nix
+@@ -0,0 +1,23 @@
++# THROWAWAY DEMO (fleet build-order step 1) — collect policy for the open
++# persist-claims emit. SCOPED `pipe.collect` (env siblings = axon), NOT the
++# `collectAll ({host,...}: true)` Form-B anti-pattern the future S2 lint rejects.
++# `den.schema.host.includes` is a mergeable list (set across 7 files), so this
++# extends it without touching the real pipes.nix.
++# Spec: papers/hola-architecture/specs/2026-06-26-fleet-open-emit-demo-design.md
++{ den, ... }:
++let
++  inherit (den.lib.policy) pipe;
++in
++{
++  den.policies.collect-persist-claims =
++    { host, ... }:
++    [
++      (pipe.from "persist-claims" [
++        (pipe.collect ({ host, ... }: true))
++      ])
++    ];
++
++  den.schema.host.includes = [
++    den.policies.collect-persist-claims
++  ];
++}
+diff --git a/modules/den/quirks/persist-claims.nix b/modules/den/quirks/persist-claims.nix
+new file mode 100644
+index 00000000..7e700233
+--- /dev/null
++++ b/modules/den/quirks/persist-claims.nix
+@@ -0,0 +1,8 @@
++# THROWAWAY DEMO (fleet build-order step 1) — Tier-2 OPEN cross-host emit.
++# Per-service persist dir + RESOLVED owner uid (config.users.users.<svc>.uid),
++# the config-dependent cross-host relationship nix-config keeps dormant.
++# Spec: papers/hola-architecture/specs/2026-06-26-fleet-open-emit-demo-design.md
++{
++  den.quirks.persist-claims.description =
++    "Per-service persist dir + resolved owner uid for external backup (Tier-2 open-emit demo)";
++}
