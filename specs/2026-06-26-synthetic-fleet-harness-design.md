@@ -81,8 +81,13 @@ throws (this is config + a CLI generation, not config alone). **Aspect-disable i
 fallback for any cone-bearing or class-defining aspect** (it would change `includes` → change the
 class key → corrupt the partition, and shrink the S2 heavy-cone signal).
 
-**Class key = sorted `den.aspects.<host>.includes` + channel + role.** The factory records each
-host's class so the observability layer partitions without re-deriving.
+**Class key = `(sorted den.aspects.<host>.includes, channel, system)`** — used identically in
+§3.3's exact-bucket and near-class definitions and in the parity-gate's "same-class reps."
+**`role` is realized AS an include** (k3s server vs agent = distinct aspects, how den models it),
+so it is **subsumed by `includes`, not a separate key field** (resolves the §3.1/§3.3 key
+mismatch; the class-spec's `role` field is a generator convenience that expands to the right
+include — a server and an agent are different classes because their `includes` differ). The
+factory records each host's class so the observability layer partitions without re-deriving.
 
 ### 3.2 Topology skeleton
 Synthetic environment + cluster + one synthetic **bgp hub** so spoke/k3s/mesh resolve.
@@ -155,8 +160,10 @@ silently passes the sentinel).
   (doable in 2.0 by overriding the entity axis attrs — **no Plane-2a injector needed**) and assert
   **drvPath equality of the sentinelized configs**. That isolates the non-identity core = the real
   soundness oracle. drvPath equality proves **output shareability**, NOT eval-work-sharing — **the
-  perf-win claim rests on the eval-stat decomposition, never on drvPath.** Budgeted: **one rep per
-  class** (a toplevel force is the 25.8M-fn path).
+  perf-win claim rests on the eval-stat decomposition, never on drvPath.** Budgeted: **one
+  comparison PAIR per class** — the gate evals two distinct same-class entities sentinelized to
+  identical identity+facter and compares (~2K toplevel forces, still ≪ N; a single rep proves
+  nothing).
 - **Provenance (review #11 — the most speculative crumb).** `why`/`support`/`dependentsFrontier`
   need a gen-rebuild graph, which den eval does NOT produce. 2.0 specifies the wiring = **project
   the emit/collect dependency edges into a gen-rebuild graph** — **nodes = emits + collects,
@@ -177,7 +184,11 @@ both share-ratio numbers, the scaling curves) + the baseline N=100 measurement �
     **Force depth specified (residual-6):** `deepSeq` of `config.assertions` + the in-cone option
     subtrees (`systemd`/`networking`/`disko`/`age`) **minus the derivation-building leaves** (stay
     off the 25.8M-fn path) — a shallow `config` force would miss a `throw` buried in
-    `systemd.services.<x>.script` or a disko leaf and false-pass.
+    `systemd.services.<x>.script` or a disko leaf and false-pass. **Coverage ceiling (honest):** a
+    throw in a subtree outside `{assertions, systemd, networking, disko, age}` and not referenced
+    by any assertion is out of the net — `deepSeq config.assertions` transitively pulls many paths
+    so coverage is broad, but a 1a green is "throw-free in the forced cone," not "whole config
+    proven throw-free."
 1b. The open emit + scoped collect **resolve at N=100** (a step-1-M1-equivalent at scale).
 2.  **All observability crumbs measurable** across the N/K/cone/channel/role sweep, **with
     eval-cache forced off**: differential per-peer perf, multi-depth force-counts, cone sizes
@@ -251,3 +262,11 @@ Class). R6 **1a force depth** = deepSeq assertions + in-cone subtrees − deriva
 R7 **O(N²)-open measured on acyclic fan-out only**; symmetric = cycle-rejection test (§3.2).
 Nits: per-class marginal diff (§3.3 Perf); tryEval defeats both sentinels (§3.3 Forcing);
 provenance node/edge model (§3.3 Provenance).
+
+**Iteration-3 reconciliation (final re-review 2026-06-26 — R1–R7 + nits verified sound; one
+new contradiction fixed):** the class-key field set disagreed between §3.1 and §3.3 → unified
+to `(sorted includes, channel, system)` with **role realized AS an include** (server/agent =
+distinct aspects), so role-less buckets can no longer collapse server+agent (which would have
+made the partition unsound and the parity-gate false-fail). Nits: parity-gate budget = one
+comparison PAIR per class (~2K forces, not K — a drvPath equality needs ≥2 reps); §4.1a coverage
+ceiling stated (1a green = throw-free in the forced cone, not whole-config).
