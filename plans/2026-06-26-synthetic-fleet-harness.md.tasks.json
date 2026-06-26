@@ -7,171 +7,318 @@
       "id": 0,
       "subject": "Task 0: Synth host factory + identity axis",
       "status": "completed",
-      "commits": ["f0ac2d43", "3db54d23"],
+      "commits": [
+        "f0ac2d43",
+        "3db54d23"
+      ],
       "note": "enable file is enable.nix NOT _enable.nix (import-tree excludes /_ paths); observe.classKey read surface = flake den-debug.classKey (flake-parts-level option, not under nixosConfiguration.config)",
       "description": "Parametric factory: class-spec list -> N synth host entities (axon-synth-NNN) with per-index identity axis; class key (sorted includes, channel, system); synthFleet.enable default OFF, committed _enable.nix=true on the throwaway branch. role realized AS an include.",
       "metadata": {
-        "files": ["modules/den/synth/options.nix", "modules/den/synth/factory.nix", "modules/den/synth/_enable.nix"],
+        "files": [
+          "modules/den/synth/options.nix",
+          "modules/den/synth/factory.nix",
+          "modules/den/synth/_enable.nix"
+        ],
         "verifyCommand": "nix eval <flags> --apply 'builtins.attrNames' '.#den-debug.synthHosts'",
-        "acceptanceCriteria": ["enable default false; off-diff = only axon-01/02/03 (git stash _enable.nix)", "N synth entities with distinct index-synthesized identity axis", "observe.classKey = (sorted includes, channel, system)"]
+        "acceptanceCriteria": [
+          "enable default false; off-diff = only axon-01/02/03 (git stash _enable.nix)",
+          "N synth entities with distinct index-synthesized identity axis",
+          "observe.classKey = (sorted includes, channel, system)"
+        ]
       }
     },
     {
       "id": 1,
       "subject": "Task 1: Facter generator (shared/varied regimes)",
-      "status": "pending",
-      "blockedBy": [0],
+      "status": "completed",
+      "blockedBy": [
+        0
+      ],
       "description": "Per-host facter facts in two regimes; ssh-ed25519 host key -> valid age recipient. gen-keys.sh emits committed synth-keys.json (recipients only). Pre-empt device_id x facter-disk coherence.",
       "metadata": {
-        "files": ["modules/den/synth/facter.nix", "modules/den/synth/facter-base.json", "synth-measure/gen-keys.sh", "modules/den/synth/keys/synth-keys.json"],
+        "files": [
+          "modules/den/synth/facter.nix",
+          "modules/den/synth/facter-base.json",
+          "synth-measure/gen-keys.sh",
+          "modules/den/synth/keys/synth-keys.json"
+        ],
         "verifyCommand": "nix eval <flags> '.#den-debug.synthFacter.axon-synth-001.facterRecipient'",
-        "acceptanceCriteria": ["facts override avoids on-disk per-host file", "shared regime byte-identical; varied distinct + valid age1... recipients", "no source-taint attempted (bucket recovered in 8b)"]
-      }
+        "acceptanceCriteria": [
+          "facts override avoids on-disk per-host file",
+          "shared regime byte-identical; varied distinct + valid age1... recipients",
+          "no source-taint attempted (bucket recovered in 8b)"
+        ]
+      },
+      "commits": [
+        "28b29b0"
+      ],
+      "note": "facter.report IS eval-forced (readFile via core.boot.network-initrd); facts overridden via builtins.toFile (no IFD); facterRegime fleet-level; device_id decoupled from facter disks; 128 committed key recipients"
     },
     {
       "id": 2,
       "subject": "Task 2: Synthetic secrets (agenix master + rekey generation)",
       "status": "pending",
-      "blockedBy": [1],
+      "blockedBy": [
+        1
+      ],
       "description": "Synthetic agenix master + per-host facter age recipient; rekey GENERATION step (00-rekey.sh) produces N secret store paths. NO aspect-disable fallback. If fallback to shared dummy secret, couples to 8b fidelity (caveat).",
       "metadata": {
-        "files": ["modules/den/synth/secrets.nix", "modules/den/synth/keys/synth-master.age", "synth-measure/00-rekey.sh"],
+        "files": [
+          "modules/den/synth/secrets.nix",
+          "modules/den/synth/keys/synth-master.age",
+          "synth-measure/00-rekey.sh"
+        ],
         "verifyCommand": "bash synth-measure/00-rekey.sh && nix eval <flags> --apply builtins.attrNames '.#nixosConfigurations.axon-synth-001.config.age.secrets'",
-        "acceptanceCriteria": ["rekey resolves; config.age.secrets.<n>.file present", "no throw reaching config.age.secrets names", "no cone-bearing/class-defining aspect dropped"]
+        "acceptanceCriteria": [
+          "rekey resolves; config.age.secrets.<n>.file present",
+          "no throw reaching config.age.secrets names",
+          "no cone-bearing/class-defining aspect dropped"
+        ]
       }
     },
     {
       "id": 3,
       "subject": "Task 3a: Full-axon class assembly + topology skeleton (structure)",
       "status": "pending",
-      "blockedBy": [2],
+      "blockedBy": [
+        2
+      ],
       "description": "Realistic-axon default classes (base + superclass + server/agent-as-includes, >=2 channels); synth environment + cluster + bgp hub; heavyClosedAspects toggle (a sweep dim). Structure resolves at N=10 (full forcing is 3b).",
       "metadata": {
-        "files": ["modules/den/synth/skeleton.nix", "modules/den/synth/factory.nix"],
+        "files": [
+          "modules/den/synth/skeleton.nix",
+          "modules/den/synth/factory.nix"
+        ],
         "verifyCommand": "nix eval <flags> --apply 'c: builtins.head (builtins.attrNames c.systemd.services)' '.#nixosConfigurations.axon-synth-001.config'",
-        "acceptanceCriteria": ["default classes = realistic mix; server/agent = distinct class keys; >=2 channels", "synth env+cluster+bgp hub resolve", "heavyClosedAspects toggle exists (sweep dim, not fixed default)", "config attrset reachable at N=10"]
+        "acceptanceCriteria": [
+          "default classes = realistic mix; server/agent = distinct class keys; >=2 channels",
+          "synth env+cluster+bgp hub resolve",
+          "heavyClosedAspects toggle exists (sweep dim, not fixed default)",
+          "config attrset reachable at N=10"
+        ]
       }
     },
     {
       "id": 4,
       "subject": "Task 3b: Criterion 1a - config fixpoint forces without throwing at scale",
       "status": "pending",
-      "blockedBy": [3],
+      "blockedBy": [
+        3
+      ],
       "description": "1a no-throw at N=10/50/100 via deepSeq(config.assertions + in-cone {systemd,networking,disko,age} - derivation leaves). The eval-feasibility/debug task (secrets, bgp-hub-at-100, k3s, mesh, device_id x facter). Coverage ceiling stated. heavy off then on.",
       "metadata": {
-        "files": ["synth-measure/1a-nothrow.sh"],
+        "files": [
+          "synth-measure/1a-nothrow.sh"
+        ],
         "verifyCommand": "SYNTH_N=100 bash synth-measure/1a-nothrow.sh",
-        "acceptanceCriteria": ["1a PASS N=10,50,100 (0 throws in the cone)", "coverage ceiling printed (throw-free in forced cone, not whole-config)", "N=100 run heavy-off then heavy-on"]
+        "acceptanceCriteria": [
+          "1a PASS N=10,50,100 (0 throws in the cone)",
+          "coverage ceiling printed (throw-free in forced cone, not whole-config)",
+          "N=100 run heavy-off then heavy-on"
+        ]
       }
     },
     {
       "id": 5,
       "subject": "Task 4: Open-emit variants + collect modes + S1 trigger + cycle test (criterion 1b)",
       "status": "pending",
-      "blockedBy": [4],
+      "blockedBy": [
+        4
+      ],
       "description": "Four open-emit cones (light/heavy/host-varying/empty); central-O(N) vs per-host-O(N2) collect (per-host = acyclic fan-out only); global-flag trigger fixture (knob, default off); mutual-collect cycle = rejection test (timeout, not hang). 1b at N=100. PHASE-1 CHECKPOINT.",
       "metadata": {
-        "files": ["modules/den/synth/open-emits.nix", "modules/den/synth/collect-policies.nix", "synth-measure/1b-resolve.sh"],
+        "files": [
+          "modules/den/synth/open-emits.nix",
+          "modules/den/synth/collect-policies.nix",
+          "synth-measure/1b-resolve.sh"
+        ],
         "verifyCommand": "SYNTH_N=100 bash synth-measure/1b-resolve.sh",
-        "acceptanceCriteria": ["light/heavy/host-varying/empty resolve at N=100", "per-host O(N2) acyclic only; cycle fixture rejected within timeout", "global-flag trigger trips resolve.nix:393-408 when on"]
+        "acceptanceCriteria": [
+          "light/heavy/host-varying/empty resolve at N=100",
+          "per-host O(N2) acyclic only; cycle fixture rejected within timeout",
+          "global-flag trigger trips resolve.nix:393-408 when on"
+        ]
       }
     },
     {
       "id": 6,
       "subject": "Task 5: Measurement driver core (eval-cache-off + stats + variance)",
       "status": "pending",
-      "blockedBy": [5],
+      "blockedBy": [
+        5
+      ],
       "description": "Shared eval wrapper: forces --option eval-cache false + cache-bust; NIX_SHOW_STATS capture; fn/copies deterministic load-bearing, cpuTime/maxRSS median/IQR over repetitions. Phase-1 scripts refactor onto this (DRY).",
       "metadata": {
-        "files": ["synth-measure/lib.sh", "synth-measure/lib_stats.py", "synth-measure/tests/lib-test.sh"],
+        "files": [
+          "synth-measure/lib.sh",
+          "synth-measure/lib_stats.py",
+          "synth-measure/tests/lib-test.sh"
+        ],
         "verifyCommand": "bash synth-measure/tests/lib-test.sh",
-        "acceptanceCriteria": ["eval-cache off proven (re-run non-zero fn)", "fn/copies deterministic; cpuTime median/IQR", "stable JSON schema"]
+        "acceptanceCriteria": [
+          "eval-cache off proven (re-run non-zero fn)",
+          "fn/copies deterministic; cpuTime median/IQR",
+          "stable JSON schema"
+        ]
       }
     },
     {
       "id": 7,
       "subject": "Task 6: Differential per-edge / per-peer perf",
       "status": "pending",
-      "blockedBy": [6],
+      "blockedBy": [
+        6
+      ],
       "description": "Per-peer increment = stats(N+1)-stats(N) within a FIXED class; force-one vs force-none. Sweep N,K,cone,channel,role, and heavyClosedAspects on/off -> closed-aspect vs open-emit O(N2) as SEPARATE curves.",
       "metadata": {
-        "files": ["synth-measure/perf-differential.sh", "synth-measure/tests/perf-test.sh"],
+        "files": [
+          "synth-measure/perf-differential.sh",
+          "synth-measure/tests/perf-test.sh"
+        ],
         "verifyCommand": "bash synth-measure/perf-differential.sh --sweep N",
-        "acceptanceCriteria": ["per-class marginal per-peer increment", "force-one/force-none isolates one edge", "closed vs open O(N2) separate curves (heavy on - heavy off)"]
+        "acceptanceCriteria": [
+          "per-class marginal per-peer increment",
+          "force-one/force-none isolates one edge",
+          "closed vs open O(N2) separate curves (heavy on - heavy off)"
+        ]
       }
     },
     {
       "id": 8,
       "subject": "Task 7: Multi-depth poison sentinels (force-counter)",
       "status": "pending",
-      "blockedBy": [6],
+      "blockedBy": [
+        6
+      ],
       "description": "value-poison + structure-poison overlays; per-edge force-set; reported quantity = value-forcing under throws-OBSERVED ceiling (structure separate; tryEval invisible to both, documented). Couples to Task 4 collect modes.",
       "metadata": {
-        "files": ["modules/den/synth/sentinels.nix", "synth-measure/force-count.sh", "synth-measure/tests/sentinel-test.sh"],
+        "files": [
+          "modules/den/synth/sentinels.nix",
+          "synth-measure/force-count.sh",
+          "synth-measure/tests/sentinel-test.sh"
+        ],
         "verifyCommand": "bash synth-measure/force-count.sh",
-        "acceptanceCriteria": ["value vs structure poison distinguish value/structure forcing", "scoped collect force-set ~ matched (not N)", "tryEval invisibility asserted+documented"]
+        "acceptanceCriteria": [
+          "value vs structure poison distinguish value/structure forcing",
+          "scoped collect force-set ~ matched (not N)",
+          "tryEval invisibility asserted+documented"
+        ]
       }
     },
     {
       "id": 9,
       "subject": "Task 8a: Class partition + exact/near-class share ratios",
       "status": "pending",
-      "blockedBy": [6],
+      "blockedBy": [
+        6
+      ],
       "description": "Partition by (sorted includes, channel, system); K, sizes, a singleton class. exact-bucket AND near-class ratios; near-class rule: same-(channel,system), base=maximal common include-set, includes superset base & |delta|<=threshold; never cross channel/system.",
       "metadata": {
-        "files": ["synth-measure/partition.py", "synth-measure/share-ratio.sh", "synth-measure/tests/partition-test.sh"],
+        "files": [
+          "synth-measure/partition.py",
+          "synth-measure/share-ratio.sh",
+          "synth-measure/tests/partition-test.sh"
+        ],
         "verifyCommand": "bash synth-measure/tests/partition-test.sh",
-        "acceptanceCriteria": ["server and agent in different classes; singleton present", "exact + near-class ratios with rule stated", "near-class never crosses channel/system"]
+        "acceptanceCriteria": [
+          "server and agent in different classes; singleton present",
+          "exact + near-class ratios with rule stated",
+          "near-class never crosses channel/system"
+        ]
       }
     },
     {
       "id": 10,
       "subject": "Task 8b: Two-regime facter differential (core/identity/facter split)",
       "status": "pending",
-      "blockedBy": [6, 1],
+      "blockedBy": [
+        6,
+        1
+      ],
       "description": "VALUE-level cross-host diff-of-diffs (NOT option-name diff): idPaths=shared-facter cross-host value-diff; idFacterPaths=varied-facter; facterPaths=idFacter-id; core=all-idFacter. Comparison surface = rendered-derivation drvPaths (NOT toJSON; hashString throws on functions). Reports both regimes; varied core < shared core (robust to joint paths; disko named).",
       "metadata": {
-        "files": ["synth-measure/regime-diff.sh", "synth-measure/regime_diff.py", "synth-measure/tests/regime-diff-test.sh"],
+        "files": [
+          "synth-measure/regime-diff.sh",
+          "synth-measure/regime_diff.py",
+          "synth-measure/tests/regime-diff-test.sh"
+        ],
         "verifyCommand": "bash synth-measure/regime-diff.sh",
-        "acceptanceCriteria": ["value-level diff-of-diffs over rendered drvPaths (pair/class, union if >2)", "non-empty facterPaths in varied, degenerate in shared", "varied core < shared core strictly; joint-function (disko) caveat printed"]
+        "acceptanceCriteria": [
+          "value-level diff-of-diffs over rendered drvPaths (pair/class, union if >2)",
+          "non-empty facterPaths in varied, degenerate in shared",
+          "varied core < shared core strictly; joint-function (disko) caveat printed"
+        ]
       }
     },
     {
       "id": 11,
       "subject": "Task 9: Canonicalized-core parity oracle",
       "status": "pending",
-      "blockedBy": [6, 1],
+      "blockedBy": [
+        6,
+        1
+      ],
       "description": "Per class, comparison PAIR of same-class hosts; override EXACTLY the Task-0 identity-axis enumeration + facter to a sentinel; assert toplevel.drvPath equality of canonicalized configs (~2 forces/class). Teeth: planted out-of-axis env.etc leak -> diverge -> FAIL. Raw cross-host drvPath shown constant-unequal (motivation).",
       "metadata": {
-        "files": ["modules/den/synth/canonicalize.nix", "synth-measure/parity-oracle.sh"],
+        "files": [
+          "modules/den/synth/canonicalize.nix",
+          "synth-measure/parity-oracle.sh"
+        ],
         "verifyCommand": "bash synth-measure/parity-oracle.sh",
-        "acceptanceCriteria": ["override key-set == Task-0 axis key-set (verbatim) asserted", "same-class pair equal post-sentinelization", "planted-leak knob -> FAIL (teeth proven)"]
+        "acceptanceCriteria": [
+          "override key-set == Task-0 axis key-set (verbatim) asserted",
+          "same-class pair equal post-sentinelization",
+          "planted-leak knob -> FAIL (teeth proven)"
+        ]
       }
     },
     {
       "id": 12,
       "subject": "Task 10: gen-rebuild provenance projection",
       "status": "pending",
-      "blockedBy": [6],
+      "blockedBy": [
+        6
+      ],
       "description": "Project pipe wiring into a gen-rebuild graph: nodes=emits+collects, edges=collect-depends-on-emit. why/support/dependentsFrontier (blast-radius bounded at plane edges). Slip-hatch: documented deferral to 2.4 if heavy/ill-defined (NOT silent omission).",
       "metadata": {
-        "files": ["modules/den/synth/provenance.nix", "synth-measure/tests/provenance-test.sh"],
+        "files": [
+          "modules/den/synth/provenance.nix",
+          "synth-measure/tests/provenance-test.sh"
+        ],
         "verifyCommand": "bash synth-measure/tests/provenance-test.sh",
-        "acceptanceCriteria": ["nodes=emits/collects, edges=collect-depends-on-emit", "why/support/dependentsFrontier answer on the synth fleet", "OR documented deferral with rationale"]
+        "acceptanceCriteria": [
+          "nodes=emits/collects, edges=collect-depends-on-emit",
+          "why/support/dependentsFrontier answer on the synth fleet",
+          "OR documented deferral with rationale"
+        ]
       }
     },
     {
       "id": 13,
       "subject": "Task 11: Baseline N=100 measurement + durable reports",
       "status": "pending",
-      "blockedBy": [7, 8, 9, 10, 11, 12],
+      "blockedBy": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
       "description": "Full sweep N{10,50,100}/K/cone/channel/role/heavyClosed; durable report to papers analysis/experiments/synthetic-fleet/ (scaling curves; closed vs open O(N2) separate; S2 cone-savings; both facter regimes + both exact/near ratios; parity-oracle per class; force-counts; provenance-or-slip). Content-shareability (8a/8b) and eval-perf (T6) SEPARATE sections. All caveats incl disko + secret-fallback. 2.0 COMPLETE.",
       "metadata": {
-        "files": ["synth-measure/baseline.sh", "../analysis/experiments/synthetic-fleet/README.md"],
+        "files": [
+          "synth-measure/baseline.sh",
+          "../analysis/experiments/synthetic-fleet/README.md"
+        ],
         "verifyCommand": "bash synth-measure/baseline.sh && ls analysis/experiments/synthetic-fleet/",
-        "acceptanceCriteria": ["sweep complete, eval-cache off", "report with all crumbs + separate content/perf sections", "patch + raw stats committed; all caveats present"]
+        "acceptanceCriteria": [
+          "sweep complete, eval-cache off",
+          "report with all crumbs + separate content/perf sections",
+          "patch + raw stats committed; all caveats present"
+        ]
       }
     }
   ],
-  "lastUpdated": "2026-06-26T-task0-done"
+  "lastUpdated": "2026-06-26T-task1-done"
 }
