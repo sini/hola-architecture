@@ -48,8 +48,10 @@ across-channel base re-pay only appear at scale. 2.0 builds that scale.
 
 ### 3.1 Host factory (parametric, full-fidelity)
 A worktree module consuming a **class-spec list**
-`[{ name, includes, count, channel, role, axisOverrides? }]` with a realistic-axon default,
-folded (`concatMap`) into `den.hosts.<system>.axon-synth-NNN` entities. **`synthFleet.enable`
+`[{ name, includes, count, channel, system, axisOverrides? }]` with a realistic-axon default,
+folded (`concatMap`) into `den.hosts.<system>.axon-synth-NNN` entities. **`role` is NOT a separate
+field** — server/agent are realized as different `includes` (so they are different classes; see
+the class-key note below). **`synthFleet.enable`
 defaults OFF** — real axon-01/02/03 untouched; synth hosts additive.
 
 Parametric **axes** (each first-class, each a sweep dimension):
