@@ -6,7 +6,9 @@
     {
       "id": 0,
       "subject": "Task 0: Synth host factory + identity axis",
-      "status": "pending",
+      "status": "completed",
+      "commits": ["f0ac2d43", "3db54d23"],
+      "note": "enable file is enable.nix NOT _enable.nix (import-tree excludes /_ paths); observe.classKey read surface = flake den-debug.classKey (flake-parts-level option, not under nixosConfiguration.config)",
       "description": "Parametric factory: class-spec list -> N synth host entities (axon-synth-NNN) with per-index identity axis; class key (sorted includes, channel, system); synthFleet.enable default OFF, committed _enable.nix=true on the throwaway branch. role realized AS an include.",
       "metadata": {
         "files": ["modules/den/synth/options.nix", "modules/den/synth/factory.nix", "modules/den/synth/_enable.nix"],
@@ -171,5 +173,5 @@
       }
     }
   ],
-  "lastUpdated": "2026-06-26"
+  "lastUpdated": "2026-06-26T-task0-done"
 }
