@@ -5,6 +5,10 @@
 > **Objective (user):** for a nix-config describing **100s–1000s of hosts**, (1) **share evaluation** across hosts and (2) **answer distributed config questions** (k8s-plane membership, peer IPs/SANs, BGP graph, claim/provide, IP-conflict, blast-radius) **without full-evaluating the fleet**.
 > **End-state (user):** as den moves to **den-hoag**, den **controls the flake entrypoint** and **hola is integrated end-to-end** — den-hoag is the fleet evaluator, hola is the per-node nixpkgs-module engine, gen is the primitive substrate.
 
+## 0. The value test (what this work is for)
+
+**Closed (entity-record) emits need none of this — each host's entity record is independently evaluable, so closed cross-host relationships are pure data aggregation with zero eval; den does them today.** The *entire* value of this architecture is making the **OPEN emit — config-dependent cross-host relationships, where host A's relation reads host B's *resolved config*** — affordable at fleet scale. That capability den already ships (`{ host, config, … }` emits resolved against peer configs) but nix-config keeps **dormant**, because reading peer config across the fleet was the blow-up. So every mechanism below is judged by one test: **does it make the open emit affordable?** The class-core eval-sharing, the cone-expander, and the declared edges all earn their place only because the open emit reads peer config and they make that read cheap (cone-restricted) and shared (once per class). The closed-query "plane" is the solved baseline, not a deliverable.
+
 ## 1. The one idea
 
 C1 failed because it tried to **discover** the host-invariant subset of a config by probing an eval it did not own (per-host sentinels = O(N) proof, net-negative, unsound on non-forcing channels). The fix is not a better probe — it is to stop discovering and start **declaring**, which is possible precisely because **den owns the eval**:
@@ -28,15 +32,24 @@ A **declared** boundary needs no O(N) discovery — only an O(K) (per-class) **v
 - **Per-host axis = a fixed-shape ~7-field record** (all `host.nix` options, `identity=false`): `hostname`; `ipv4/ipv6` (`:258-283`); thunderbolt loopback `ipv4/ipv6 + nsap` (`:378-386`); 2 disk `device_id`s; `facter.json` (`:392`, identical top-level schema, value-only deltas); per-host agenix-rekey secrets (`:391`, **identical secret-name set**, per-host ciphertext). The 43 divergent leaf derivations are **pure functions of this record**; it feeds only cheap config leaves (k3s flag strings, FRR/nftables config, disko device strings, secret paths) — **never package construction.** This is the homogeneous-class condition.
 - **Cluster scope is already shared:** ~40 k8s aspects (`clusters/axon.nix:72-120`: cilium/argocd/cert-manager/longhorn/cnpg/prometheus/media) eval **once at cluster scope** and apply out-of-band via argocd — already off every host's toplevel. The heaviest workload eval is not on the per-host axis at all.
 
-## 4. Plane 1 — Distributed-query (ships on today's substrate, O(touched), zero nixos eval)
+## 4. Plane 1 — Distributed-query (O(touched)) — TWO TIERS
 
-The distributed config questions are **all** answerable from the ~7-field host **entity record** via **pipeline-parametric** quirks + `pipe.collect`/`collectAll` — **no `nixosConfiguration` force.** Verified: a 200-host query forces **0** toplevels; `colmenaHive.targetHosts` and `k3s-nodes` read only entity fields.
+Distributed config questions split by what they read:
+
+**Tier 1 — entity-record (closed) — the SOLVED BASELINE, not a deliverable.** Membership, peer IPs/SANs, BGP graph, aspect topology, claim/provide of *entity* data — answerable from the ~7-field host entity record via **pipeline-parametric** quirks (`{host,environment,…}`) + `pipe.collect`/`collectAll`, ZERO nixos force (200-host query forces **0** toplevels). **Each entity record is independently evaluable — den does this today; hola/gen/den-hoag add nothing here.** It is listed only to draw the line against Tier 2.
+
+**Tier 2 — config-referencing (open) — forces the source host's MODULE-EVAL slice, NOT the toplevel.** Some claims read the *resolved* config — e.g. a **persist claim for external backup referencing `config.users.users.<svc>.uid` for ownership**. This is an open `{host,config,…}` emit and **cannot** come from the entity record. But it is far cheaper than a build, and the architecture makes it affordable three ways (all measured on real axon, `/tmp/hola_tier2.nix`):
+- **(a) module-slice, not derivation-construction.** Reading a config *value* (uid/gid/port) forces that host's module merge + the value's cone — **not** the 94% derivation-construction cost-center (no drvPath). Measured: real axon uids resolve to ints fast (`acme=976`, `frr=978`, …), no toplevel. So a Tier-2 *value* read ≈ the ~6% module slice per touched peer, not a full toplevel. (A Tier-2 read of a *derivation*/store-path — e.g. a rendered config file — additionally pays that one drv.)
+- **(b) per-edge scoped, or LOCAL.** If the persist claim is consumed on the *same* host (host backs itself up), it is a LOCAL config emit → den's `markConfigThunk` deferred-local (`class-module.nix:157-168`) → resolved in the host's own evalModules (which runs anyway) → **zero** extra eval. A *central* backup collecting all hosts' claims is cross-host: Gate-A laziness forces only the **collected** peers (`/tmp/d5_lazy_probe.nix`), and the §8a-S2 lint forbids the unscoped `collectAll (_:true)` shape that would force everyone.
+- **(c) class-shareable when deterministic.** Measured: axon's shared-user uids are **byte-identical across axon-02/03** (`true`) — the `deterministic-uids` aspect makes ownership class-invariant. So the uid resolution lives in the class core (Plane 2) → resolved **once per class**, shared; only the per-host *data path* (the identity axis) is per-member. The §8a-S4 `pipe.reads` declaration bounds the cone; the O(K) parity gate **validates** the value really is class-invariant (deterministic ⇒ yes; a host using non-deterministic allocation would diverge and the gate would force it per-host).
+
+Tier 2 is exactly the "export quirk pipes eval'd with source-host config" capability — supported, bounded (module-slice + scoped + class-shared), and the §8a seam (S2 cone-expander + S4 declared reads) is what keeps it from degrading to the fleet blow-up.
 
 - **Substrate (all shipped):** `gen-graph` = topology oracle (one fleet accessor over the host registry; claim/provide/network/route/k8s-membership as **separate edge maps** combined by `unionEdges`/`compose`; **point queries** `canReach`/`dependentsOf`/`dependentsFrontier` = O(reachable)). `gen-derive` = relationship rules (claim/provide/route/membership as `mkRule` + stratified phases + fixpoint — already powers den's claim/provide aggregation; distinct identity per relation). `gen-scope` selective materialization (`subtreeOf`/`allNodesWhere`/`nodesOfType`). `gen-rebuild` **provenance** (`why`/`support`, pure trace read, **zero recompute**) answers "would changing host X touch host Y" without evaluating either.
 - **Scope discipline:** distinguish `collect` (siblings = same environment, within-plane) from `collectAll` (fleet-wide) — it bounds the touched set. Avoid `gen-graph.condensation` (closure-based **O(n²)**, a ceiling at 1000s of hosts) for global ops; rely on point-query selectivity (verified sufficient).
 - **Correction to prior belief:** "network fabric / connect kind 0 / unified claim engine" are **spec concepts (papers), not in code**. Today's claim/provide **is** `pipe.collect` aggregation over quirks (`policy-effects.nix:296-346`). The query plane builds on that reality.
 
-**This plane is the immediate deliverable** — it answers the "distributed config questions" half of the objective on shipped den + gen, no eval-sharing required.
+**The deliverable here is Tier 2, not Tier 1.** Tier 1 already works on shipped den; the work only matters where it makes Tier-2 (open, config-referencing) relationships affordable — which is the same class-core sharing (§5) + cone-expander (§8a S2) the eval-sharing arm builds. So Plane 1's *novel* surface and Plane 2 are one effort viewed from two ends of the open emit, not independent planes.
 
 ## 5. Plane 2 — Class-core eval-sharing (the perf lever)
 
@@ -79,6 +92,44 @@ den-hoag is **not yet shipped**, so the fleet findings get to *specify* its quir
 - **S3 — axis/core separation = the closed-injection seam (Gate B-proven).** The class core is evaluated once (axis-free) and **`mkForce`-injected as a plain projection into each member via `extendModules`** at the `host.instantiate` seam (`host.nix:397`). Gate B proved this on real axon: the injection is honored **without recompute** (`filterOverrides` drops the real def unforced, `REAL-DEF-FORCED=0`), the core is forced **once across two distinct member fixpoints** (`CORE-FORCED=1` vs reconstruct `=2`), and the result is **byte-identical** to from-scratch (`a02-core→a03 system.path == a03`, `z81p0vvk…`). The per-host axis (the ~7-field entity record) is the late-bound delta; **class key = sorted `den.aspects.<host>.includes`**; aggregation roots stay per-member (§10).
 - **S4 — HOAG declared edges (`recordedDeps`) for queries + affected-set.** Quirks/attributes are `gen-scope` nodes whose reads are **declared edges**, auto-populated by an **aspect→resource edge extractor** (the "declare the boundary" build step). Those declared edges simultaneously: bound distributed queries to O(touched) (Plane 1), make the affected-set sound (Plane 3), give blast-radius fidelity, **and supply the cone for S2** (the declared reads *are* the restricted cone). One declaration mechanism serves all four uses.
 
+### 8b. Worked Tier-2 example: a persist-claim for external backup (the `config.…uid` case)
+
+The canonical Tier-2 quirk — emit each service's persist directory + **resolved ownership** for backup. The emit reads the *config* (not the entity record), so it is an **open** `{ host, config, … }` function (the real emit shape, cf. `k3s.nix:48` which is the *closed* `{ environment, host, … }` form). `host.settings.*` is the entity record (closed); `config.users.users.<svc>.uid` is the resolved value (open, Tier-2).
+
+```nix
+# modules/den/quirks/persist-claims.nix — SHIPPED surface (decl)
+{ den.quirks.persist-claims.description = "Persist dirs + ownership for external backup"; }
+
+# the emit (in the persist aspect) — OPEN: reads resolved config.  SHIPPED surface.
+persist-claims = { host, config, ... }:
+  map (svc: {
+    path = "/persist/${host.name}/${svc}";        # per-host PATH (the identity axis — cheap)
+    uid  = config.users.users.${svc}.uid;          # resolved config VALUE — Tier-2 (int, no drv)
+    gid  = config.users.groups.${svc}.gid;
+  }) host.settings.backup.services;
+```
+
+**Form A — host backs *itself* up (LOCAL). SHIPPED, ~free.** The claim is consumed by the *same* host's backup service. den marks the open emit a config-thunk **deferred-local** (`markConfigThunk`, `class-module.nix:157-168`) → resolved inside that host's own `evalModules`, which runs anyway → **zero extra eval**. This is exactly how den handles age-secrets today.
+
+**Form B — central backup orchestrator collects *all* hosts (CROSS-HOST), naive. SHIPPED but the cost the seam exists to fix; the S2 lint REJECTS it.**
+```nix
+den.policies.collect-persist-claims =
+  pipe.from "persist-claims" [ (pipe.collectAll ({ host, ... }: true)) ];  # unscoped + open ⇒ forces EVERY host's config
+```
+Cost: O(N hosts × the host's module-merge cone) — Tier-2 *values*, so **no** derivation construction (the 94%), but the full per-host module-merge × N. This is the `collectAll (_: true)` + config-dep shape the S2 lint forbids.
+
+**Form C — central backup, SCOPED + cone-declared (the seam). S2/S4 PROPOSED surface.**
+```nix
+den.policies.collect-persist-claims =
+  pipe.from "persist-claims" [
+    (pipe.reads [ "users.users" "users.groups" ])                 # S2: declare the open emit's config cone
+    (pipe.collect ({ host, ... }: host.settings.backup.central))   # scoped predicate (NOT collectAll _:true)
+  ];
+```
+Cost: O(collected-hosts × the **uid/gid cone**) — each source host resolved against a config restricted to `users.users`/`users.groups` (gen-scope `subtreeOf` / restricted `evalModules` over S4's declared modules), not its full config. **And class-shared:** axon's uids are deterministic (measured byte-identical across axon-02/03), so the cone resolves **once per class** → O(classes × uid-cone) + O(hosts × cheap path). The O(K) parity gate validates the uid is genuinely class-invariant; a host using non-deterministic allocation diverges and is correctly resolved per-host.
+
+**Takeaway for the API:** Tier-2 is first-class and affordable — `pipe.reads` is the one new verb that turns an open emit from "full peer config × N" (Form B) into "declared cone × classes" (Form C); deferred-local (Form A) already makes the self-backup case free on shipped den.
+
 ## 9. Honest perf contract
 
 **NOT** total-O(|AFFECTED|). The win is the **sub-root closure** (the 10986 shared drvs lifted off the N-axis). The per-host residual is irreducible: re-run the cheap **aggregation roots** (`etc`/`system-units`/`activate`/`toplevel`) over shared inputs + the ~43 fresh leaf derivations. **Do not attempt to share the aggregation roots.** `propagateEager` gives a constant-factor expensive-axis win on cut-heavy cones; **Determinate parallel-eval (~3.7×, verbatim nixpkgs, zero code)** composes on top for the residual tail and for the cold full-fleet case. Plane 2's value is removing the N-multiplier from the dominant cost; Determinate's is parallelizing what remains.
@@ -92,12 +143,13 @@ The gates ran (workflow `wh0ygg53t`) and **all three passed** — the existentia
 - ✅ **Gate B — Plane 2a real-axon: 2a-real-win.** Eval-**work** shared (`CORE-FORCED=1` vs reconstruct `=2`), byte-identical, on real axon-02/03 (§8a S3 / §5). Answers the drvPath≠work-shared caveat on the real seam.
 - ✅ **Plane 1 — works at zero force**, ship-ready against the entity-record extract.
 
-**Build order:**
-1. **Plane 1 — ship now** (zero risk, shipped substrate); the distributed-questions objective at zero nixos eval. Two named follow-ons for the *live* flake (not blockers): a `flake.den.hosts` registry output (den, `flakeOutputs.nix:42-46`) + the aspect→resource edge extractor (§8a S4).
-2. **Plane 2a — build (GO):** extend the Gate-B single-projection proof to the full class-invariant **cone** (`mkForce`-thread the frozen core into N member fixpoints via `extendModules`); class key = sorted `den.aspects.<host>.includes`; aggregation roots per-member; each class gated OFF until the O(K) byte-identical parity gate is green (the §7.1 non-forcing-channel backstop — force-count covers throws-OBSERVED only).
-3. **den-hoag seam (§8a):** S1 (eliminate the global `hasAnyConfigThunk` → per-sid lazy `hostConfigFor`) + S2 (`pipe.reads` cone-expander + unscoped-open-emit lint). Recommended regardless; closes the latent footgun and makes the open axis affordable.
-4. **Plane 3:** `gen-rebuild override` (data) + `applyEdgeDelta`/re-partition (topology), keyed by class; member-config change forces re-validation (§7.1).
-5. **Plane 2b (deferred keystone):** the content-addressed cross-invocation persistence store (gen-rebuild *consuming* the threaded-but-unconsumed gen-scope, `FUTURE_WORK`) — where the felt CI/dev-loop pain is met. Net-new; 2a does **not** imply 2b.
+**Build order — centered on the open emit (§0); closed Tier-1 is the baseline, not a step.**
+1. **Unlock the open emit on real axon (the capability demo).** Wire one real **open** cross-host quirk — the central persist-claim collector reading `config.users.users.<svc>.uid` (§8b Form C) — with a **scoped** `pipe.collect` predicate. Per Gate A this is *already affordable today* (Nix laziness forces only matched peers); measure it on real axon to prove the dormant capability is usable. This is the first thing that has value den lacks today.
+2. **den-hoag seam S2/S1 (§8a) — make the open emit *scale*.** `pipe.reads` cone-expander (open emit reads only its declared cone, not the full peer config) + the unscoped-`collectAll`+config-dep lint + eliminate the global `hasAnyConfigThunk` (→ per-sid lazy `hostConfigFor`). This is what takes the open emit from "matched-peers × full-config" to "declared-cone × peers."
+3. **Plane 2a class-sharing (§5, Gate-B GO) — make the open emit's reads shared.** Extend the Gate-B proof to the full class-invariant cone so the config an open emit reads (e.g. the deterministic uid) is resolved **once per class**; class key = sorted `den.aspects.<host>.includes`; aggregation roots per-member; gated per-class on the O(K) byte-identical parity gate (§7.1). *Side benefit:* the same sharing gives the N-fold faster fleet build.
+4. **Plane 3 — incremental:** `gen-rebuild override` (data) + `applyEdgeDelta`/re-partition (topology), keyed by class; member-config change forces re-validation (§7.1).
+5. **Plane 2b (deferred keystone):** the content-addressed cross-invocation persistence store (gen-rebuild *consuming* the threaded-but-unconsumed gen-scope, `FUTURE_WORK`) — O(touched) provenance/blast-radius *across* invocations + cross-host result sharing. Net-new; 2a does **not** imply 2b.
+- *(Tier-1 closed queries already work on shipped den; the two live-flake niceties — a `flake.den.hosts` debug output + the aspect→resource extractor (S4) — help any query but are not the value and not blockers.)*
 
 ## 11. Open decisions for the user
 
