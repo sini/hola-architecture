@@ -57,7 +57,7 @@
     {
       "id": 2,
       "subject": "Task 2: Synthetic secrets (agenix master + rekey generation)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         1
       ],
@@ -74,7 +74,12 @@
           "no throw reaching config.age.secrets names",
           "no cone-bearing/class-defining aspect dropped"
         ]
-      }
+      },
+      "commits": [
+        "8aad5a6c",
+        "68806c2f"
+      ],
+      "note": "agenix battery fires per-host via schema.host.includes; rekey is GENERATION (CLI --dummy) step; per-host recipient=facter pubkey, synth master appended mkIf enable; per-host ciphertext variance PRESERVED (no 8b fidelity caveat); real-fleet byte-identical (identHash independent of masterIdentities); private master key dropped (unused under --dummy)"
     },
     {
       "id": 3,
@@ -320,5 +325,5 @@
       }
     }
   ],
-  "lastUpdated": "2026-06-26T-task1-done"
+  "lastUpdated": "2026-06-26T-task2-done"
 }
