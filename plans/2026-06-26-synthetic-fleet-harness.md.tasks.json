@@ -84,7 +84,7 @@
     {
       "id": 3,
       "subject": "Task 3a: Full-axon class assembly + topology skeleton (structure)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         2
       ],
@@ -101,7 +101,11 @@
           "heavyClosedAspects toggle exists (sweep dim, not fixed default)",
           "config attrset reachable at N=10"
         ]
-      }
+      },
+      "commits": [
+        "50826f63"
+      ],
+      "note": "Task 3a verified via root/direct-eval WORKAROUND (sudo env NIX_REMOTE= nix eval = 3s): 10 synth hosts generate, full-axon config structurally resolves no-throw. sini+daemon eval HANGS (unrelated nix-env bug, see analysis/sini-daemon-eval-hang-DEBUG.md); remote-build-client commented out of roles.default. ALL subsequent harness evals (3b+) must use the root/direct workaround until the daemon hang is fixed."
     },
     {
       "id": 4,
@@ -325,5 +329,5 @@
       }
     }
   ],
-  "lastUpdated": "2026-06-26T-task2-done"
+  "lastUpdated": "2026-06-26T-task3a-done-workaround"
 }
