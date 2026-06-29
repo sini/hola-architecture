@@ -1,0 +1,54 @@
+{
+  "planPath": "plans/2026-06-28-fleet-seam-s2-pipe-reads-cone-lint.md",
+  "subProject": "S2 — pipe.reads cone-expander + unscoped-collectAll+config-dep lint (full scope, user-chosen)",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 0: S2 den worktree (off S1) + override + lint bite-target confirmation",
+      "status": "completed",
+      "description": "den worktree feat/s2-pipe-reads off feat/s1-per-sid-hostconfig (b3449c8b); --override-input den path: evaluates synth identically to S1 (pre-S2); confirm globalTrigger synthOpenTrigger collectAll RESOLVES pre-S2 (the bite-target).",
+      "metadata": {"files": ["~/Documents/repos/den/.worktrees/s2-pipe-reads", "nix/lib/policy-effects.nix"], "verifyCommand": "classKey N=10 S1==S2 worktree; globalTrigger=true trigger resolves pre-change", "acceptanceCriteria": ["worktree off S1 clean", "override evaluates identically pre-S2", "globalTrigger collectAll resolves pre-S2 (recorded)"]}
+    },
+    {
+      "id": 1,
+      "subject": "Task 1: pipe.reads [paths] stage + carry the cone to resolution",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "Add pipe.reads = paths: { __pipeStage = \"reads\"; paths; } to policy-effects.nix; thread the sibling reads stage's paths through assemble-pipes to the config-dep emit resolution site (collect/collectAll/broadcast handler). No behavior change yet for emits without reads.",
+      "metadata": {"files": ["nix/lib/policy-effects.nix", "nix/lib/aspects/fx/assemble-pipes.nix"], "verifyCommand": "pipe.from [(pipe.reads [...]) (pipe.collect ...)] parses + paths reach resolution; den CI green", "acceptanceCriteria": ["reads stage added + validates paths", "paths reach config-dep resolution alongside collect", "no behavior change without reads"]}
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: cone-restriction -- resolve config-dep emits against the declared cone",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "coneView cfg paths = attrset of ONLY declared paths' real values (undeclared access throws natural attribute-missing); reads-declared config-dep emit resolves against coneView (hostConfigFor sid) paths not full config. Declared reads byte-identical; out-of-cone reads throw. Comments: cone = ENFORCEMENT not runtime cut (laziness already scopes, base-dominated).",
+      "metadata": {"files": ["nix/lib/aspects/fx/assemble-pipes.nix"], "verifyCommand": "reads-declared emit == unrestricted value (byte-identical); out-of-cone read throws", "acceptanceCriteria": ["coneView via setAttrByPath/getAttrFromPath", "reads emit resolves against coneView", "declared read byte-identical", "out-of-cone throws", "honest framing in comments"]}
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: the lint -- config-dep collected emit must declare reads",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "A collect/collectAll stage whose collected emit isConfigDependent, in a chain with NO reads stage, throws the lint (names pipe + tells author to add pipe.reads). reads-declared passes; closed (non-config-dep) emits unaffected. Fail-loud at resolution.",
+      "metadata": {"files": ["nix/lib/aspects/fx/assemble-pipes.nix"], "verifyCommand": "synth globalTrigger (collectAll config-dep no-reads) REJECTED; +reads passes; closed unaffected", "acceptanceCriteria": ["config-dep collect/collectAll w/o reads throws lint", "reads-declared passes", "closed emits unaffected", "fail-loud"]}
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: validation -- lint fires, cone enforces, byte-identical",
+      "status": "completed",
+      "blockedBy": [2, 3],
+      "description": "den CI green (same count + S2 fixtures; update any den test using undeclared config-dep collect); synth globalTrigger REJECTED by lint, +reads resolves; cone enforces (declared byte-identical, out-of-cone throws teeth); real axon-02/03 toplevel drvPath byte-identical S1-vs-S2 override. Write s2-result.md.",
+      "metadata": {"files": ["synth-measure", "modules/den/synth/open-emits.nix", "analysis/experiments/synthetic-fleet/s2-result.md"], "verifyCommand": "s2-result.md: lint-rejects-globalTrigger, cone teeth, real-axon byte-identical, CI green", "acceptanceCriteria": ["den CI green", "lint fires on globalTrigger", "cone enforces+teeth", "real-axon byte-identical", "evidence written"]}
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: clean-diff prep + tracker + memory + band wrap-up",
+      "status": "completed",
+      "blockedBy": [4],
+      "description": "S2 = focused diff on S1 (policy-effects + assemble-pipes + fixture); prose commit; s2-result.md to papers; tasks.json complete; project_hola.md tail = open-emit-affordability band (Plane-2a+S1+S2) COMPLETE, remaining = den-hoag seam itself + Plane-2b (deferred); report band-complete to user.",
+      "metadata": {"files": ["plans/2026-06-28-fleet-seam-s2-pipe-reads-cone-lint.md.tasks.json", "RESUME-fleet-architecture.md", "~/.claude/memory/project_hola.md"], "verifyCommand": "git diff --stat focused; tasks.json completed; memory tail = band complete", "acceptanceCriteria": ["focused S2 diff", "prose commit", "evidence committed", "memory tail band-complete", "band-complete surfaced"]}
+    }
+  ],
+  "lastUpdated": "2026-06-28"
+}
