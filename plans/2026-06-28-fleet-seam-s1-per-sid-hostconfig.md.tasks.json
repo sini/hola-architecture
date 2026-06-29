@@ -5,7 +5,7 @@
     {
       "id": 0,
       "subject": "Task 0: den S1 worktree + local override + pre-S1 baseline",
-      "status": "pending",
+      "status": "completed",
       "description": "den worktree on feat/s1-per-sid-hostconfig off fix/broadcast-home-pool-to-host; wire synth harness via --override-input den path:<worktree>; capture pre-S1 A(globalTrigger)/B(scoped cone)/C(closed) x N=10/50/100 baseline.",
       "metadata": {
         "files": ["~/Documents/repos/den/.worktrees/s1-per-sid-hostconfig", "synth-measure/lib.sh", "analysis/experiments/synthetic-fleet/s1-baseline.md"],
@@ -16,7 +16,7 @@
     {
       "id": 1,
       "subject": "Task 1: factor hostConfigs into hostConfigScopeIds (set) + hostConfigFor (lazy) in resolve.nix",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [0],
       "description": "Delete hasAnyConfigThunk (:393-408); replace hostConfigs map (:415-468) with hostConfigScopeIds = attrNames specsByHost + builtConfigs = lazy mapAttrs + hostConfigFor sid; thread pair into both assemblePipes calls; re-express bprimeEdges guard (:903); preserve B' NULL-pass cycle + §A comments verbatim. TDD: footgun-invariant regression fixture first.",
       "metadata": {
@@ -28,7 +28,7 @@
     {
       "id": 2,
       "subject": "Task 2: thread (set, fn) pair through assemble-pipes.nix consumers",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1],
       "description": "Replace every hostConfigs map use in assemble-pipes.nix (producerConfigs:124-182, resolveEntry:189-216, resolveThunks:233, stage interpreters :404..:1095) with hostConfigScopeIds set-membership + hostConfigFor lazy reads; empty-set == old null defer semantics; markConfigThunks (local+broadcast) untouched; align spawn-node.nix:115. Engine must eval.",
       "metadata": {
@@ -40,7 +40,7 @@
     {
       "id": 3,
       "subject": "Task 3: den CI regression gate — full suite green",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [2],
       "description": "just ci full suite same pass count as pre-S1; deadbugs/bprime-basedrain-crosshost + broadcast(#623) + collect/collectAll cross-host + footgun fixture all pass on substance.",
       "metadata": {
@@ -52,7 +52,7 @@
     {
       "id": 4,
       "subject": "Task 4: synth + real-axon validation — footgun killed, byte-identical",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [3],
       "description": "Re-run A/B/C x N=10/50/100 vs baseline: B/C show no fleet-wide arming (footgun killed), A (collectAll) unchanged; real-axon persist-claims demo + toplevel.drvPath byte-identical (nix-diff clean). Write s1-result.md.",
       "metadata": {
@@ -64,7 +64,7 @@
     {
       "id": 5,
       "subject": "Task 5: clean-diff prep + tracker + memory + S2 handoff",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [4],
       "description": "Ensure S1 = focused 2-3-file den diff rebaseable onto denful/den main; commit prose (no co-authored-by); commit papers evidence; update tasks.json + RESUME-fleet-architecture.md + project_hola.md CURRENT STATE tail in place; surface den-PR-vs-hold (D5) decision; stage S2 plan.",
       "metadata": {
