@@ -1,0 +1,78 @@
+{
+  "planPath": "plans/2026-06-28-fleet-seam-s1-per-sid-hostconfig.md",
+  "subProject": "S1 — kill global hasAnyConfigThunk → per-sid lazy hostConfigFor",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 0: den S1 worktree + local override + pre-S1 baseline",
+      "status": "pending",
+      "description": "den worktree on feat/s1-per-sid-hostconfig off fix/broadcast-home-pool-to-host; wire synth harness via --override-input den path:<worktree>; capture pre-S1 A(globalTrigger)/B(scoped cone)/C(closed) x N=10/50/100 baseline.",
+      "metadata": {
+        "files": ["~/Documents/repos/den/.worktrees/s1-per-sid-hostconfig", "synth-measure/lib.sh", "analysis/experiments/synthetic-fleet/s1-baseline.md"],
+        "verifyCommand": "bash synth-measure/1b-resolve.sh against local override == github pin; s1-baseline.md has 3x3 table",
+        "acceptanceCriteria": ["worktree clean off fix branch", "local override evaluates identically", "A/B/C x N=10/50/100 baseline recorded"]
+      }
+    },
+    {
+      "id": 1,
+      "subject": "Task 1: factor hostConfigs into hostConfigScopeIds (set) + hostConfigFor (lazy) in resolve.nix",
+      "status": "pending",
+      "blockedBy": [0],
+      "description": "Delete hasAnyConfigThunk (:393-408); replace hostConfigs map (:415-468) with hostConfigScopeIds = attrNames specsByHost + builtConfigs = lazy mapAttrs + hostConfigFor sid; thread pair into both assemblePipes calls; re-express bprimeEdges guard (:903); preserve B' NULL-pass cycle + §A comments verbatim. TDD: footgun-invariant regression fixture first.",
+      "metadata": {
+        "files": ["nix/lib/aspects/fx/resolve.nix"],
+        "verifyCommand": "den fx/cross-host CI subset green; config-dep-collect template resolves; closed-only byte-identical",
+        "acceptanceCriteria": ["hasAnyConfigThunk gone", "hostConfigScopeIds = attrNames specsByHost no force", "hostConfigFor per-sid memoized", "both assemblePipes calls get new pair", "bprimeEdges re-expressed", "no infinite recursion"]
+      }
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: thread (set, fn) pair through assemble-pipes.nix consumers",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "Replace every hostConfigs map use in assemble-pipes.nix (producerConfigs:124-182, resolveEntry:189-216, resolveThunks:233, stage interpreters :404..:1095) with hostConfigScopeIds set-membership + hostConfigFor lazy reads; empty-set == old null defer semantics; markConfigThunks (local+broadcast) untouched; align spawn-node.nix:115. Engine must eval.",
+      "metadata": {
+        "files": ["nix/lib/aspects/fx/assemble-pipes.nix", "nix/lib/aspects/fx/spawn-node.nix"],
+        "verifyCommand": "nix flake check templates/ci green; grep hostConfigs -> only comments",
+        "acceptanceCriteria": ["producerConfigs branches on set/fn", "resolveEntry defer = empty set", "all stage interpreters threaded", "markConfigThunks untouched", "engine evaluates"]
+      }
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: den CI regression gate — full suite green",
+      "status": "pending",
+      "blockedBy": [2],
+      "description": "just ci full suite same pass count as pre-S1; deadbugs/bprime-basedrain-crosshost + broadcast(#623) + collect/collectAll cross-host + footgun fixture all pass on substance.",
+      "metadata": {
+        "files": ["just ci", "deadbugs/bprime-basedrain-crosshost.nix"],
+        "verifyCommand": "just ci final-line summary == pre-change count (~1044), full green",
+        "acceptanceCriteria": ["full suite parity", "B' witness passes", "broadcast+cross-host pass", "footgun fixture passes"]
+      }
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: synth + real-axon validation — footgun killed, byte-identical",
+      "status": "pending",
+      "blockedBy": [3],
+      "description": "Re-run A/B/C x N=10/50/100 vs baseline: B/C show no fleet-wide arming (footgun killed), A (collectAll) unchanged; real-axon persist-claims demo + toplevel.drvPath byte-identical (nix-diff clean). Write s1-result.md.",
+      "metadata": {
+        "files": ["synth-measure/1b-resolve.sh", "analysis/experiments/synthetic-fleet/s1-result.md"],
+        "verifyCommand": "s1-result.md: B/C footgun-killed, A unchanged, real-axon drvPath string-identical",
+        "acceptanceCriteria": ["footgun killed on scoped/local", "no regression on collectAll worst case", "real-axon drvPath identical", "evidence written"]
+      }
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: clean-diff prep + tracker + memory + S2 handoff",
+      "status": "pending",
+      "blockedBy": [4],
+      "description": "Ensure S1 = focused 2-3-file den diff rebaseable onto denful/den main; commit prose (no co-authored-by); commit papers evidence; update tasks.json + RESUME-fleet-architecture.md + project_hola.md CURRENT STATE tail in place; surface den-PR-vs-hold (D5) decision; stage S2 plan.",
+      "metadata": {
+        "files": ["plans/2026-06-28-fleet-seam-s1-per-sid-hostconfig.md.tasks.json", "RESUME-fleet-architecture.md", "~/.claude/memory/project_hola.md"],
+        "verifyCommand": "git diff --stat = only resolve/assemble-pipes/spawn-node/fixture; tasks.json all completed; memory tail updated",
+        "acceptanceCriteria": ["clean focused diff", "prose commit", "evidence committed to papers", "memory tail in-place", "den-PR decision surfaced"]
+      }
+    }
+  ],
+  "lastUpdated": "2026-06-28"
+}

@@ -1,0 +1,66 @@
+{
+  "planPath": "plans/2026-06-28-plane-2a-class-share-poc.md",
+  "subProject": "Plane-2a — class-core eval-sharing PoC (archetype-once + axis-delta, units-level, parity-gated)",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 0: pick class + discover Delta + re-confirm baseline marginal",
+      "status": "completed",
+      "description": "Largest same-class group via .#den-debug.classKey + partition.py at N=10/50/100; deltaKeys via one-time host0-vs-host1 units drvPath diff (sharedKeys = complement); parity-clean check sharedKeys drvPath-identical across >=3 hosts (nftables residual excluded); re-confirm vanilla marginal ~21.7M.",
+      "metadata": {
+        "files": ["synth-measure/share-ratio.sh", "synth-measure/parity-oracle.sh", "analysis/experiments/synthetic-fleet/2a-baseline.md"],
+        "verifyCommand": "2a-baseline.md has class, deltaKeys/sharedKeys split, parity-clean check, marginal ~21.7M",
+        "acceptanceCriteria": ["largest class identified", "deltaKeys axis-dependent + recorded", "sharedKeys parity-clean >=3 hosts", "vanilla marginal re-confirmed"]
+      }
+    },
+    {
+      "id": 1,
+      "subject": "Task 1: synth-measure/2a-share.sh vanilla-vs-2a copies differential, parity-gated",
+      "status": "completed",
+      "blockedBy": [0],
+      "description": "One eval (canonicalize=false): archUnits = host0 sharedKeys forced once; hostUnits2a h = archUnits // genAttrs deltaKeys (realUnits h); vanilla = deepSeq N full vs 2a = deepSeq [archUnits, Delta_1..N-1]; copies via synth_measure_reps; per-key parity gate ERRORS before measuring if any sharedKey diverges. Honest: marginal_2a includes per-host module-merge WHNF (paid both); saving = shared deep-construction.",
+      "metadata": {
+        "files": ["synth-measure/2a-share.sh", "synth-measure/lib.sh"],
+        "verifyCommand": "SYNTH_N=10 bash synth-measure/2a-share.sh: differential table, marginal_2a < marginal_vanilla strict, parity gate green",
+        "acceptanceCriteria": ["uses synth_measure_reps no bespoke eval", "deltaKeys spliced, archUnits forced once", "parity gate fires pre-measure + errors on divergence", "reports saving(M)", "fails loud on ok:false"]
+      }
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: sweep N {2,10,50,100} x K classes -- saving(N) + marginal collapse",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "Sweep SYNTH_N {2,10,50,100} on >=2 classes; saving(N) ~linear; marginal_2a << marginal_vanilla (or honest negative if module-merge dominates, with decomposition); marginal collapse quantified.",
+      "metadata": {
+        "files": ["synth-measure/2a-share.sh", "analysis/experiments/synthetic-fleet/2a-result.md"],
+        "verifyCommand": "2a-result.md: saving(N) table N{2,10,50,100} on >=2 classes + marginal-collapse number",
+        "acceptanceCriteria": ["saving(N) linear", "marginal_2a << vanilla OR honest decomposition", ">=2 classes", "5 bounds documented"]
+      }
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: tests/2a-share-test.sh -- gate teeth + monotonic saving",
+      "status": "completed",
+      "blockedBy": [1],
+      "description": "Committed test: 2a units drvPath-identical to vanilla (identity); planted out-of-axis leak => parity gate REJECTS (teeth, mirrors parity-oracle.sh); saving(50) > saving(10) > 0 (monotonic); passes via daemon path.",
+      "metadata": {
+        "files": ["synth-measure/tests/2a-share-test.sh"],
+        "verifyCommand": "bash synth-measure/tests/2a-share-test.sh: all PASS; leak => gate REJECT",
+        "acceptanceCriteria": ["identity 2a==vanilla per-key", "teeth: leak rejected", "monotonic saving", "listed in tests/"]
+      }
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: evidence + tracker + memory + S1 handoff",
+      "status": "completed",
+      "blockedBy": [2, 3],
+      "description": "Commit 2a-share.sh + test (worktree, den UNCHANGED) prose msg w/ saving + 5 bounds; 2a-result.md headline to papers; tasks.json complete; project_hola.md CURRENT STATE tail in place (Plane-2a done + number, next=S1); surface number to user; proceed to S1 (apply 3 reviewer fixes first).",
+      "metadata": {
+        "files": ["synth-measure/2a-share.sh", "RESUME-fleet-architecture.md", "~/.claude/memory/project_hola.md"],
+        "verifyCommand": "git log -1; 2a-result.md present; memory tail has the number",
+        "acceptanceCriteria": ["script+test committed prose", "2a-result.md durable headline", "tasks.json completed", "memory tail in-place", "number surfaced + S1 next"]
+      }
+    }
+  ],
+  "lastUpdated": "2026-06-28"
+}
