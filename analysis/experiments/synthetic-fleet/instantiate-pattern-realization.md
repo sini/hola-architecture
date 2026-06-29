@@ -78,6 +78,50 @@ Measured (N=100 agent class, units drvPaths; per-node marginal scale-invariant 6
 - Both run 96 nodes where reconstruct OOMs; `system.path` inject is far lighter (8GB) than the
   units inject (39GB) because units force each member's full spine + delta, not one value.
 
+## Fixed-input injection — recovering the `extendModules` spine tax (2026-06-29)
+
+The `extendModules` realization pays a per-member module-merge re-eval spine (1.89× on units). The
+"den-hoag" idea is to inject the class core as a *fixed input* so the member produces only the delta.
+Tested the today-stock approximation: **config-merge** — assemble the per-host result as a plain
+merge on the *resolved* `arch.config`, no `extendModules`, no re-eval:
+```nix
+archCore = lib.getAttrs sharedKeys arch.config.systemd.units;        # forced once
+member h = archCore // builtins.removeAttrs ncs.${h}.config.systemd.units sharedKeys;
+```
+Measured (units; vs reconstruct 21.72M/node):
+
+| approach | marginal/node | ×  | produces | byte-identical |
+|---|---|---|---|---|
+| `extendModules`+`mkForce` | 11.49M | 1.89× | full per-host config | ✓ |
+| **config-merge (fixed-input)** | **6.54M (6-host) / ≈8.76M (fleet)** | **3.32× / 2.48×** | the **projection** | **✓ (225/225 keys)** |
+
+**Result: fixed-input via config-merge recovers the tax — 2.48× at fleet scale, 3.32× at the 6-host
+class** (small-scale is higher: more keys class-invariant across fewer members), byte-identical
+(units == real host units, verified). Dropping the `extendModules` re-eval is the whole win.
+
+**Structural limit (why this is projection-only, and what den-hoag must still do):** config-merge can
+reassemble a *consumed projection* (units, system.path) but NOT a full per-host **toplevel** —
+`(arch.config // { networking.hostName = h; }).system.build.toplevel` returns arch's *already-resolved*
+toplevel (the `//` patches a sibling key; it cannot retroactively recompute the monolithic toplevel),
+so every host gets arch's toplevel. (Couldn't even force the synth toplevel to show it — it hits the
+known initrd-SSH assertion; the limit is structural, not measured.) **So fixed-input recovers 2.48×+
+TODAY for projections you consume directly; extending that recovery to the deployable per-host
+toplevel is precisely den-hoag's job** (restructure modules so each member's eval consumes the
+injected core and emits only the delta — no monolithic re-merge).
+
+### The today-usable helper (projection-level)
+```nix
+# Force the class archetype's core once; assemble each member's projection as core // delta.
+# Recovers 2.48x+ (byte-identical) for a CONSUMED projection (e.g. systemd.units, system.path).
+# NOT a full toplevel (structural limit above). archetype + hostConfigs are real den-instantiated configs.
+shareClassProjection =
+  { archetype, hostConfigs, sharedKeys, project ? (c: c.systemd.units) }:
+  let core = lib.getAttrs sharedKeys (project archetype.config);
+  in builtins.mapAttrs
+       (_: hc: core // builtins.removeAttrs (project hc.config) sharedKeys)
+       hostConfigs;
+```
+
 ## Honest bounds
 - **Two projections measured** — `system.path` (leaf, ~42%, 4.38×) + `systemd.units` (co-produced
   attrset, ~53%, 1.89×). Together ≈ the per-host cost-center. The remaining toplevel surface (etc,
